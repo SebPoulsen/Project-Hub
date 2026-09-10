@@ -23,7 +23,9 @@ export function DeleteProjectModal({
   const [busy, setBusy] = useState(false);
   useScrollLock();
 
-  const armed = confirmText.trim() === project.name && !busy;
+  // Exact, case-sensitive match against the real stored name — no trimming or
+  // case normalization on either side.
+  const armed = confirmText === project.name && !busy;
 
   async function handleDelete() {
     if (!armed) return;
@@ -41,10 +43,25 @@ export function DeleteProjectModal({
           <strong>all</strong> its reflections, notes, to-dos, and attachments.
           This cannot be undone.
         </p>
-        <label className="label" style={{ display: "block", marginBottom: 6 }}>
-          Type <strong style={{ color: "var(--text)" }}>{project.name}</strong> to
-          confirm
-        </label>
+        <div className="label" style={{ marginBottom: 6 }}>
+          Type the project name to confirm
+        </div>
+        {/* The name is shown OUTSIDE the .label (which uppercases) and with an
+            explicit text-transform:none, so the displayed text is the exact
+            stored name the match checks against — case and all. */}
+        <p style={{ fontSize: 14, color: "var(--muted)", margin: "0 0 8px" }}>
+          Enter{" "}
+          <strong
+            style={{
+              color: "var(--text)",
+              fontFamily: "var(--font-mono)",
+              textTransform: "none",
+            }}
+          >
+            {project.name}
+          </strong>{" "}
+          exactly, including capitalization.
+        </p>
         <input
           type="text"
           value={confirmText}
