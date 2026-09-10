@@ -1,0 +1,53 @@
+import { NextResponse } from "next/server";
+import { listNotes, readNote, createNote } from "@/lib/notes";
+import { commitAll } from "@/lib/git";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const project = searchParams.get("project");
+  if (!project) {
+    return NextResponse.json({ error: "project is required" }, { status: 400 });
+  }
+  const id = searchParams.get("id");
+  if (id) {
+    const note = await readNote(project, id);
+    if (!note) return NextResponse.json({ error: "not found" }, { status: 404 });
+    return NextResponse.json(note);
+  }
+  return NextResponse.json(await listNotes(project));
+}
+
+export async function POST(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const project = searchParams.get("project");
+  if (!project) {
+    return NextResponse.json({ error: "project is required" }, { status: 400 });
+  }
+
+  const form = await req.formData();
+  const title = String(form.get("title") ?? "");
+  const bodyText = String(form.get("body") ?? "");
+  const tagsRaw = String(form.get("tags") ?? "");
+  const tags = tagsRaw
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  const attachments: { filename: string; bytes: Buffer }[] = [];
+  for (const entry of form.getAll("files")) {
+    if (entry instanceof File && entry.size > 0) {
+      const buf = Buffer.from(await entry.arrayBuffer());
+      attachments.push({ filename: entry.name, bytes: buf });
+    }
+  }
+
+  const note = await createNote(project, { title, body: bodyText, tags, attachments });
+  const hash = await commitAll(
+    project,
+    `note: ${note.id}${attachments.length ? ` (+${attachments.length} attachment${attachments.length > 1 ? "s" : ""})` : ""}`
+  );
+  return NextResponse.json({ ...note, commit: hash }, { status: 201 });
+}

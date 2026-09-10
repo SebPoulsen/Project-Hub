@@ -1,0 +1,12 @@
+# This .gitignore is for the APP CODE repo (~/Desktop/project-hub), NOT your
+# project data. Your data lives in iCloud with its own per-project git repos.
+
+/node_modules
+/.next
+/out
+/build
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+.env*.local
+npm-debug.log*
