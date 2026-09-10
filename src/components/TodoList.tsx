@@ -19,6 +19,22 @@ function newId() {
   }
 }
 
+const CalendarIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);
+
+const PencilIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+);
+
 export function TodoList({
   project,
   showAdd = true,
@@ -27,20 +43,21 @@ export function TodoList({
   project: string;
   /** Show the single add bar. */
   showAdd?: boolean;
-  /** Render only this computed bucket, headerless (dashboard glance mode). */
-  only?: Bucket;
+  /** Render only these computed buckets, headerless (dashboard glance mode). */
+  only?: Bucket[];
 }) {
   const [items, setItems] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
-  // The add-date defaults to today and resets to today on mount — i.e. whenever
-  // you navigate into To-dos or reload (same derive-fresh idea as the reflection
-  // date fix), never persisting a stale hand-picked date.
   const [dueDraft, setDueDraft] = useState(() => ymd(new Date()));
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
-  // Bucketing is a load-time computation (not a live poller), so capture "now"
-  // once per mount. Re-mounting on navigation re-buckets everything.
   const [now] = useState(() => new Date());
+
+  // Inline edit + quick-reschedule state.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editDue, setEditDue] = useState("");
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Todo[]>([]);
@@ -89,6 +106,11 @@ export function TodoList({
     scheduleSave();
   };
 
+  // Single update path used by add-edit and quick-reschedule alike. Changing
+  // `due` re-buckets automatically (buckets are computed on render).
+  const updateTodo = (id: string, patch: Partial<Todo>) =>
+    mutate((cur) => cur.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+
   const add = () => {
     const t = text.trim();
     if (!t) return;
@@ -96,12 +118,12 @@ export function TodoList({
       id: newId(),
       text: t,
       done: false,
-      due: dueDraft || null, // cleared date => Later
+      due: dueDraft || null,
       createdAt: new Date().toISOString(),
     };
     mutate((cur) => [...cur, todo]);
     setText("");
-    setDueDraft(ymd(new Date())); // reset to today for the next add
+    setDueDraft(ymd(new Date()));
   };
 
   const toggle = (id: string) =>
@@ -109,12 +131,29 @@ export function TodoList({
       cur.map((x) => (x.id === id ? { ...x, done: !x.done } : x))
     );
 
+  const startEdit = (t: Todo) => {
+    setReschedulingId(null);
+    setEditingId(t.id);
+    setEditText(t.text);
+    setEditDue(t.due ?? "");
+  };
+  const cancelEdit = () => setEditingId(null);
+  const saveEdit = (id: string) => {
+    const t = editText.trim();
+    updateTodo(id, { text: t || "Untitled task", due: editDue || null });
+    setEditingId(null);
+  };
+
+  const applyReschedule = (id: string, value: string) => {
+    updateTodo(id, { due: value || null });
+    setReschedulingId(null);
+  };
+
   const remove = (id: string) => {
     const item = latest.current.find((x) => x.id === id);
-    setPendingIds((p) => new Set(p).add(id)); // hide immediately
+    setPendingIds((p) => new Set(p).add(id));
     scheduleDelete({
       label: `To-do "${item?.text ?? ""}" deleted`,
-      // Self-contained (survives unmount on navigation): re-read, drop, write.
       perform: async () => {
         const cur: TodosFile = await fetch(
           `/api/todos?project=${encodeURIComponent(project)}`
@@ -149,6 +188,38 @@ export function TodoList({
   const buckets = bucketize(visible, now);
 
   const renderItem = (t: Todo) => {
+    // Inline edit form (text + due), replaces the row.
+    if (editingId === t.id) {
+      return (
+        <div key={t.id} className="titem titem-editing">
+          <input
+            type="text"
+            className="tedit-text"
+            value={editText}
+            autoFocus
+            onChange={(e) => setEditText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveEdit(t.id);
+              if (e.key === "Escape") cancelEdit();
+            }}
+          />
+          <input
+            type="date"
+            className="tedit-date"
+            title="Due date (clear for “Later”)"
+            value={editDue}
+            onChange={(e) => setEditDue(e.target.value)}
+          />
+          <button className="btn btn-accent" onClick={() => saveEdit(t.id)}>
+            Save
+          </button>
+          <button className="btn btn-ghost" onClick={cancelEdit}>
+            Cancel
+          </button>
+        </div>
+      );
+    }
+
     const label = dueLabel(t.due, now);
     return (
       <div key={t.id} className={`titem ${t.done ? "done" : ""}`}>
@@ -165,34 +236,60 @@ export function TodoList({
         </button>
         <span className="titem-text">{t.text}</span>
         {label && <span className={`due-chip due-${label.tone}`}>{label.text}</span>}
-        <button
-          type="button"
-          className="titem-del"
-          title="Delete"
-          aria-label="Delete task"
-          onClick={() => remove(t.id)}
-        >
-          ×
-        </button>
+
+        {reschedulingId === t.id ? (
+          <input
+            type="date"
+            className="titem-reschedule"
+            autoFocus
+            value={t.due ?? ymd(now)}
+            onChange={(e) => applyReschedule(t.id, e.target.value)}
+            onBlur={() => setReschedulingId(null)}
+          />
+        ) : (
+          <div className="titem-actions">
+            <button
+              type="button"
+              className="titem-act"
+              title="Reschedule"
+              aria-label="Reschedule"
+              onClick={() => setReschedulingId(t.id)}
+            >
+              <CalendarIcon />
+            </button>
+            <button
+              type="button"
+              className="titem-act"
+              title="Edit"
+              aria-label="Edit task"
+              onClick={() => startEdit(t)}
+            >
+              <PencilIcon />
+            </button>
+            <button
+              type="button"
+              className="titem-act titem-del"
+              title="Delete"
+              aria-label="Delete task"
+              onClick={() => remove(t.id)}
+            >
+              ×
+            </button>
+          </div>
+        )}
       </div>
     );
   };
 
-  // Dashboard glance mode: a single computed bucket, no header, no add bar.
+  // Dashboard glance mode: the given computed buckets, concatenated, no headers.
   if (only) {
-    const list = buckets[only];
+    const list = only.flatMap((b) => buckets[b]);
     if (list.length === 0)
       return <div className="muted" style={{ fontSize: 14 }}>Nothing due today.</div>;
     return <div className="tsection-body">{list.map(renderItem)}</div>;
   }
 
-  const Section = ({
-    bucket,
-    always,
-  }: {
-    bucket: Bucket;
-    always?: boolean;
-  }) => {
+  const Section = ({ bucket, always }: { bucket: Bucket; always?: boolean }) => {
     const list = buckets[bucket];
     if (list.length === 0 && !always) return null;
     return (
@@ -242,6 +339,7 @@ export function TodoList({
         </form>
       )}
 
+      <Section bucket="overdue" />
       <Section bucket="today" always />
       <Section bucket="week" />
       <Section bucket="later" />

@@ -1,8 +1,9 @@
 import type { Todo } from "./todos";
 
-export type Bucket = "today" | "week" | "later";
+export type Bucket = "overdue" | "today" | "week" | "later";
 
 export const BUCKET_LABEL: Record<Bucket, string> = {
+  overdue: "Overdue",
   today: "Today",
   week: "This Week",
   later: "Later",
@@ -36,7 +37,8 @@ export function weekEndYmd(now: Date): string {
 export function bucketOf(todo: Todo, now: Date): Bucket {
   if (!todo.due) return "later";
   const t = ymd(now);
-  if (todo.due <= t) return "today"; // today or overdue
+  if (todo.due < t) return "overdue"; // past due
+  if (todo.due === t) return "today";
   if (todo.due <= weekEndYmd(now)) return "week"; // future, within this week
   return "later"; // future, beyond this week
 }
@@ -64,8 +66,14 @@ export function bucketize(
   todos: Todo[],
   now: Date
 ): Record<Bucket, Todo[]> {
-  const out: Record<Bucket, Todo[]> = { today: [], week: [], later: [] };
+  const out: Record<Bucket, Todo[]> = {
+    overdue: [],
+    today: [],
+    week: [],
+    later: [],
+  };
   for (const t of todos) out[bucketOf(t, now)].push(t);
+  out.overdue.sort(cmpDated);
   out.today.sort(cmpDated);
   out.week.sort(cmpDated);
   out.later.sort(cmpLater);

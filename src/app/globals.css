@@ -416,18 +416,73 @@ select:focus {
   text-decoration: line-through;
   color: var(--muted);
 }
-.titem-del {
+/* Row actions: reschedule / edit / delete — revealed on hover */
+.titem-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
   opacity: 0;
+  transition: opacity 0.12s;
+}
+.titem:hover .titem-actions {
+  opacity: 1;
+}
+.titem-act {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
   color: var(--muted);
   cursor: pointer;
-  background: none;
-  border: none;
+  border-radius: 6px;
   font-size: 18px;
   line-height: 1;
-  padding: 0 2px;
+  padding: 0;
 }
-.titem:hover .titem-del {
-  opacity: 1;
+.titem-act:hover {
+  color: var(--text);
+  background: var(--card-2);
+}
+.titem-act.titem-del:hover {
+  color: var(--danger);
+}
+/* Keep actions reachable on touch (no hover) */
+@media (hover: none) {
+  .titem-actions {
+    opacity: 1;
+  }
+}
+
+/* Quick-reschedule inline date input */
+.titem-reschedule {
+  flex: 0 0 auto;
+  width: auto !important;
+  font-size: 12px;
+  padding: 5px 8px !important;
+}
+
+/* Inline edit form (replaces the row) */
+.titem-editing {
+  gap: 8px;
+}
+.tedit-text {
+  flex: 1;
+  font-size: 15px;
+  padding: 8px 10px !important;
+}
+.tedit-date {
+  width: auto !important;
+  font-size: 13px;
+  padding: 8px 10px !important;
+}
+
+/* Overdue section header reads red to match its chips */
+.tsection-overdue .tsection-title {
+  color: var(--danger);
 }
 
 /* Relative due-date chips */

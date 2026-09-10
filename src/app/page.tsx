@@ -67,7 +67,11 @@ export default function Dashboard() {
                 Manage →
               </Link>
             </div>
-            <TodoList project={current.slug} only="today" showAdd={false} />
+            <TodoList
+              project={current.slug}
+              only={["overdue", "today"]}
+              showAdd={false}
+            />
           </div>
 
           <div className="card">
