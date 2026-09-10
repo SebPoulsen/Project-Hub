@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useScrollLock } from "@/lib/useScrollLock";
 import type { ReflectionData } from "@/lib/reflections";
 import type { Todo } from "@/lib/todos";
 
@@ -39,6 +40,7 @@ export function DayDetail({
   const [reflection, setReflection] = useState<ReflectionData | null>(null);
   const [loaded, setLoaded] = useState(false);
 
+  useScrollLock(); // lock background scroll while the popover is open
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);

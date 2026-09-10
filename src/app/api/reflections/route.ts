@@ -3,6 +3,7 @@ import {
   readReflection,
   writeReflection,
   listReflectionDates,
+  readAllReflections,
   deleteReflection,
   type ReflectionData,
 } from "@/lib/reflections";
@@ -21,6 +22,10 @@ export async function GET(req: Request) {
   const project = searchParams.get("project");
   if (!project) {
     return NextResponse.json({ error: "project is required" }, { status: 400 });
+  }
+  if (searchParams.get("all")) {
+    // Full content of every reflection, oldest-first (for "Copy all").
+    return NextResponse.json({ entries: await readAllReflections(project) });
   }
   const date = searchParams.get("date");
   if (date) {

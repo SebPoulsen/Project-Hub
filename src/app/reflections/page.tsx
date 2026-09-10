@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { useHub } from "../providers";
 import { ReflectionEditor } from "@/components/ReflectionEditor";
 import { usePendingDeletes } from "@/components/PendingDeletes";
+import { copyPlainText } from "@/lib/clipboard";
+import type { ReflectionData } from "@/lib/reflections";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -21,6 +23,25 @@ function pretty(d: string) {
   });
 }
 
+// Plain-text rendering of one reflection — matches the single-entry Copy button.
+function formatReflection(date: string, d: ReflectionData): string {
+  return [
+    `Reflection — ${date}`,
+    "",
+    "What did you notice today?",
+    d.noticed.trim() || "—",
+    "",
+    "What did you learn today?",
+    d.learned.trim() || "—",
+    "",
+    "What became clearer today?",
+    d.clearer.trim() || "—",
+    "",
+    "Notes",
+    d.notes.trim() || "—",
+  ].join("\n");
+}
+
 function ReflectionsInner() {
   const { current, loading } = useHub();
   const params = useSearchParams();
@@ -28,6 +49,7 @@ function ReflectionsInner() {
   const [date, setDate] = useState(todayStr());
   const [dates, setDates] = useState<string[]>([]);
   const [editorKey, setEditorKey] = useState(0);
+  const [copiedAll, setCopiedAll] = useState(false);
   // Dates soft-deleted but still within the undo window. The file still exists
   // on disk during that window, so refreshDates would re-add them — this filter
   // keeps them hidden until the delete finalizes (or is undone).
@@ -109,6 +131,24 @@ function ReflectionsInner() {
 
   const visibleDates = dates.filter((d) => !hiddenDates.has(d));
 
+  // Copy every past reflection as plain text, oldest-to-newest, for pasting
+  // into a report or handing to Claude at the end of the project period.
+  const copyAll = async () => {
+    if (!current) return;
+    const res = await fetch(
+      `/api/reflections?project=${encodeURIComponent(current.slug)}&all=1`
+    ).then((r) => r.json());
+    const entries: { date: string; data: ReflectionData }[] = res?.entries ?? [];
+    if (entries.length === 0) return;
+    const text = entries
+      .map((e) => formatReflection(e.date, e.data))
+      .join("\n\n────────────────────────\n\n");
+    if (await copyPlainText(text)) {
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 1800);
+    }
+  };
+
   return (
     <div>
       <div className="page-head">
@@ -144,8 +184,13 @@ function ReflectionsInner() {
         </div>
 
         <div className="card">
-          <div className="label" style={{ marginBottom: 12 }}>
-            Past entries · {visibleDates.length}
+          <div className="row between" style={{ marginBottom: 12 }}>
+            <div className="label">Past entries · {visibleDates.length}</div>
+            {visibleDates.length > 0 && (
+              <button className="btn btn-ghost" onClick={copyAll}>
+                {copiedAll ? "Copied ✓" : "Copy all"}
+              </button>
+            )}
           </div>
           <div className="stack" style={{ gap: 4 }}>
             {visibleDates.length === 0 && (

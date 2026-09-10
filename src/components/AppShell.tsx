@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useHub } from "@/app/providers";
+import { DeleteProjectModal } from "@/components/DeleteProjectModal";
 import type { ThemeName } from "@/lib/settings";
 
 const NAV = [
@@ -26,6 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     useHub();
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   async function handleCreate() {
     const name = newName.trim();
@@ -96,6 +98,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               + New project
             </button>
           )}
+
+          {current && !creating && (
+            <button
+              className="btn btn-ghost danger"
+              style={{ marginTop: 6, width: "100%", fontSize: 13 }}
+              onClick={() => setDeleteOpen(true)}
+            >
+              Delete project…
+            </button>
+          )}
         </div>
 
         {/* Nav */}
@@ -151,6 +163,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="main">{children}</main>
+
+      {deleteOpen && current && (
+        <DeleteProjectModal
+          project={current}
+          onClose={() => setDeleteOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -117,6 +117,19 @@ export async function deleteReflection(
   return true;
 }
 
+/** Read every reflection for a project, oldest-first (for "Copy all"). */
+export async function readAllReflections(
+  slug: string
+): Promise<{ date: string; data: ReflectionData }[]> {
+  const dates = (await listReflectionDates(slug)).slice().sort(); // oldest -> newest
+  const out: { date: string; data: ReflectionData }[] = [];
+  for (const date of dates) {
+    const data = await readReflection(slug, date);
+    if (data) out.push({ date, data });
+  }
+  return out;
+}
+
 /** List all reflection dates (newest first) for the calendar / index views. */
 export async function listReflectionDates(slug: string): Promise<string[]> {
   const dir = reflectionsDir(slug);

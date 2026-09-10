@@ -18,6 +18,7 @@ interface Ctx {
   setTheme: (t: ThemeName) => void;
   selectProject: (slug: string) => void;
   createProject: (name: string) => Promise<Project | null>;
+  deleteProject: (slug: string) => Promise<void>;
   reloadProjects: () => Promise<void>;
 }
 
@@ -86,6 +87,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const deleteProject = useCallback(
+    async (slug: string): Promise<void> => {
+      await fetch(`/api/projects?slug=${encodeURIComponent(slug)}`, {
+        method: "DELETE",
+      });
+      const list: Project[] = await fetch("/api/projects").then((r) => r.json());
+      setProjects(list);
+      setCurrent((prev) => {
+        if (prev && prev.slug !== slug) return prev; // deleted a different one
+        return list[0] ?? null; // deleted the active one -> fall back
+      });
+    },
+    []
+  );
+
   // Initial load: settings + projects.
   useEffect(() => {
     (async () => {
@@ -119,6 +135,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         setTheme,
         selectProject,
         createProject,
+        deleteProject,
         reloadProjects,
       }}
     >

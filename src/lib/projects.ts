@@ -59,6 +59,21 @@ export async function getProject(slug: string): Promise<Project | null> {
 }
 
 /**
+ * Permanently delete a project folder and everything in it (reflections, notes,
+ * todos, attachments, git history). Irreversible — the caller gates this behind
+ * a type-the-name confirmation. Guarded to only ever remove a direct child of
+ * the data dir.
+ */
+export async function deleteProject(slug: string): Promise<boolean> {
+  const dir = projectDir(slug);
+  const parent = path.dirname(dir);
+  if (parent !== DATA_DIR || path.basename(dir) !== slug) return false;
+  if (!(await exists(projectFile(slug)))) return false;
+  await fs.rm(dir, { recursive: true, force: true });
+  return true;
+}
+
+/**
  * Create a new project by materializing the full folder schema. Every project
  * is a self-contained git repo, so it can be moved, backed up, or handed to
  * Claude on its own.

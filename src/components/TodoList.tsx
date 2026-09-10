@@ -58,6 +58,9 @@ export function TodoList({
   const [editText, setEditText] = useState("");
   const [editDue, setEditDue] = useState("");
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  // Draft for the quick-reschedule picker so typing a date doesn't commit (and
+  // close) on every keystroke — we commit only on Enter / blur / calendar pick.
+  const [rescheduleDraft, setRescheduleDraft] = useState("");
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Todo[]>([]);
@@ -144,8 +147,16 @@ export function TodoList({
     setEditingId(null);
   };
 
-  const applyReschedule = (id: string, value: string) => {
-    updateTodo(id, { due: value || null });
+  const openReschedule = (t: Todo) => {
+    setEditingId(null);
+    setRescheduleDraft(t.due ?? ymd(now));
+    setReschedulingId(t.id);
+  };
+  // Commit the draft (only when it actually changed) and close. Called on a
+  // deliberate action — Enter, blur, or picking from the calendar.
+  const commitReschedule = (t: Todo) => {
+    const next = rescheduleDraft || null;
+    if (next !== (t.due ?? null)) updateTodo(t.id, { due: next });
     setReschedulingId(null);
   };
 
@@ -242,9 +253,13 @@ export function TodoList({
             type="date"
             className="titem-reschedule"
             autoFocus
-            value={t.due ?? ymd(now)}
-            onChange={(e) => applyReschedule(t.id, e.target.value)}
-            onBlur={() => setReschedulingId(null)}
+            value={rescheduleDraft}
+            onChange={(e) => setRescheduleDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitReschedule(t);
+              if (e.key === "Escape") setReschedulingId(null);
+            }}
+            onBlur={() => commitReschedule(t)}
           />
         ) : (
           <div className="titem-actions">
@@ -253,7 +268,7 @@ export function TodoList({
               className="titem-act"
               title="Reschedule"
               aria-label="Reschedule"
-              onClick={() => setReschedulingId(t.id)}
+              onClick={() => openReschedule(t)}
             >
               <CalendarIcon />
             </button>
@@ -289,11 +304,15 @@ export function TodoList({
     return <div className="tsection-body">{list.map(renderItem)}</div>;
   }
 
-  const Section = ({ bucket, always }: { bucket: Bucket; always?: boolean }) => {
+  // A plain function that RETURNS JSX (called inline below), not a component
+  // used as <Section/>. This matters: an inline-defined component gets a new
+  // identity every render and would remount its whole subtree each keystroke,
+  // thrashing focus in the edit/reschedule inputs.
+  const renderSection = (bucket: Bucket, always = false) => {
     const list = buckets[bucket];
     if (list.length === 0 && !always) return null;
     return (
-      <div className={`tsection tsection-${bucket}`}>
+      <div key={bucket} className={`tsection tsection-${bucket}`}>
         <div className="tsection-head">
           <span className="tsection-title">{BUCKET_LABEL[bucket]}</span>
           <span className="tsection-count">{list.length}</span>
@@ -339,10 +358,10 @@ export function TodoList({
         </form>
       )}
 
-      <Section bucket="overdue" />
-      <Section bucket="today" always />
-      <Section bucket="week" />
-      <Section bucket="later" />
+      {renderSection("overdue")}
+      {renderSection("today", true)}
+      {renderSection("week")}
+      {renderSection("later")}
     </div>
   );
 }

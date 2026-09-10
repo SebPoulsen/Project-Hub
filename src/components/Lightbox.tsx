@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useScrollLock } from "@/lib/useScrollLock";
 
 /**
  * Full-resolution image modal. Inline note images are constrained for layout
@@ -16,16 +17,11 @@ export function Lightbox({
   alt?: string;
   onClose: () => void;
 }) {
+  useScrollLock();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
-    // Prevent background scroll while open.
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
   return (
