@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useHub } from "@/app/providers";
 import { DeleteProjectModal } from "@/components/DeleteProjectModal";
 import type { ThemeName } from "@/lib/settings";
@@ -29,6 +29,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [newName, setNewName] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const foldoutRef = useRef<HTMLDivElement>(null);
+
+  // Close the Settings fold-out when clicking anywhere outside it.
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (foldoutRef.current && !foldoutRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [settingsOpen]);
 
   async function handleCreate() {
     const name = newName.trim();
@@ -72,7 +85,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="sidebar-spacer" />
 
         {/* Fold-out: project management + palette (collapsed by default) */}
-        <div className="foldout">
+        <div className="foldout" ref={foldoutRef}>
           <button
             className="foldout-head"
             aria-expanded={settingsOpen}
