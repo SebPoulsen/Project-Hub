@@ -30,11 +30,19 @@ export function useHub(): Ctx {
   return ctx;
 }
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({
+  children,
+  initialTheme = "dark",
+}: {
+  children: React.ReactNode;
+  initialTheme?: ThemeName;
+}) {
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [current, setCurrent] = useState<Project | null>(null);
-  const [theme, setThemeState] = useState<ThemeName>("dark");
+  // Seeded from the server-read palette (see layout) so it matches the theme
+  // already on <html> — no post-hydration flip.
+  const [theme, setThemeState] = useState<ThemeName>(initialTheme);
 
   const applyTheme = (t: ThemeName) => {
     document.documentElement.setAttribute("data-theme", t);

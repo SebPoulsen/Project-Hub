@@ -531,6 +531,42 @@ select:focus {
   border-color: var(--accent);
 }
 
+/* Sidebar fold-out (Settings): project management + palette */
+.foldout {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+.foldout-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.foldout-head:hover {
+  background: var(--card-2);
+  color: var(--text);
+}
+.foldout-head .chev {
+  transition: transform 0.15s ease;
+  font-size: 18px;
+  line-height: 1;
+}
+.foldout-head .chev.open {
+  transform: rotate(90deg);
+}
+.foldout-body {
+  gap: 14px;
+  padding: 10px 12px 4px;
+}
+
 /* Notes */
 /* Constrain any image rendered inside note content so a huge photo scales to
    fit its card instead of overflowing. Display-only — the file on disk stays

@@ -3,21 +3,27 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { AppShell } from "@/components/AppShell";
 import { PendingDeletesProvider } from "@/components/PendingDeletes";
+import { readSettings } from "@/lib/settings";
 
 export const metadata: Metadata = {
   title: "Project Hub",
   description: "Local-first project companion. Your data, as plain files.",
 };
 
-export default function RootLayout({
+// Read settings.json per request so the saved palette is known before the
+// first paint (no flash of the default theme on reload).
+export const dynamic = "force-dynamic";
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const settings = await readSettings();
   return (
-    <html lang="en" data-theme="dark" suppressHydrationWarning>
+    <html lang="en" data-theme={settings.theme} suppressHydrationWarning>
       <body>
-        <Providers>
+        <Providers initialTheme={settings.theme}>
           <PendingDeletesProvider>
             <AppShell>{children}</AppShell>
           </PendingDeletesProvider>

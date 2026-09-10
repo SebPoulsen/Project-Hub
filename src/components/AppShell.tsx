@@ -28,6 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   async function handleCreate() {
     const name = newName.trim();
@@ -45,72 +46,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           Project Hub
         </div>
 
-        {/* Project switcher */}
-        <div style={{ padding: "0 6px 10px" }}>
-          <div className="label" style={{ marginBottom: 6 }}>
-            Project
-          </div>
-          {projects.length > 0 ? (
-            <select
-              value={current?.slug ?? ""}
-              onChange={(e) => selectProject(e.target.value)}
-            >
-              {projects.map((p) => (
-                <option key={p.slug} value={p.slug}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <div className="muted" style={{ fontSize: 13 }}>
-              No projects yet
-            </div>
-          )}
-
-          {creating ? (
-            <div className="stack" style={{ marginTop: 8 }}>
-              <input
-                type="text"
-                autoFocus
-                placeholder="New project name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-              />
-              <div className="row">
-                <button className="btn btn-accent" onClick={handleCreate}>
-                  Create
-                </button>
-                <button
-                  className="btn btn-ghost"
-                  onClick={() => setCreating(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              className="btn"
-              style={{ marginTop: 8, width: "100%" }}
-              onClick={() => setCreating(true)}
-            >
-              + New project
-            </button>
-          )}
-
-          {current && !creating && (
-            <button
-              className="btn btn-ghost danger"
-              style={{ marginTop: 6, width: "100%", fontSize: 13 }}
-              onClick={() => setDeleteOpen(true)}
-            >
-              Delete project…
-            </button>
-          )}
+        {/* Current project */}
+        <div className="label" style={{ padding: "0 12px 12px" }}>
+          Project: {current?.name ?? "None"}
         </div>
 
-        {/* Nav */}
+        {/* Primary navigation */}
         <nav className="stack" style={{ gap: 2 }}>
           {NAV.map((n) => {
             const active =
@@ -130,35 +71,121 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="sidebar-spacer" />
 
-        {/* Theme switcher */}
-        <div style={{ padding: "0 6px" }}>
-          <div className="label" style={{ marginBottom: 4 }}>
-            Palette
-          </div>
-          <div className="theme-swatches">
-            {THEMES.map((t) => (
-              <button
-                key={t.name}
-                title={t.name}
-                aria-label={`${t.name} theme`}
-                className={`swatch ${theme === t.name ? "active" : ""}`}
-                style={{ background: t.bg }}
-                onClick={() => setTheme(t.name)}
-              >
-                <span
-                  style={{
-                    position: "absolute",
-                    right: 4,
-                    bottom: 4,
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: t.accent,
-                  }}
-                />
-              </button>
-            ))}
-          </div>
+        {/* Fold-out: project management + palette (collapsed by default) */}
+        <div className="foldout">
+          <button
+            className="foldout-head"
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen((o) => !o)}
+          >
+            <span className="row" style={{ gap: 10 }}>
+              <span style={{ width: 18, textAlign: "center" }}>⚙</span>
+              Settings
+            </span>
+            <span className={`chev ${settingsOpen ? "open" : ""}`}>›</span>
+          </button>
+
+          {settingsOpen && (
+            <div className="foldout-body stack">
+              {/* Project switcher */}
+              <div>
+                <div className="label" style={{ marginBottom: 6 }}>
+                  Project
+                </div>
+                {projects.length > 0 ? (
+                  <select
+                    value={current?.slug ?? ""}
+                    onChange={(e) => selectProject(e.target.value)}
+                  >
+                    {projects.map((p) => (
+                      <option key={p.slug} value={p.slug}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="muted" style={{ fontSize: 13 }}>
+                    No projects yet
+                  </div>
+                )}
+              </div>
+
+              {/* New project */}
+              {creating ? (
+                <div className="stack">
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="New project name"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                  />
+                  <div className="row">
+                    <button className="btn btn-accent" onClick={handleCreate}>
+                      Create
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => setCreating(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className="btn"
+                  style={{ width: "100%" }}
+                  onClick={() => setCreating(true)}
+                >
+                  + New project
+                </button>
+              )}
+
+              {/* Palette */}
+              <div>
+                <div className="label" style={{ marginBottom: 4 }}>
+                  Palette
+                </div>
+                <div className="theme-swatches">
+                  {THEMES.map((t) => (
+                    <button
+                      key={t.name}
+                      title={t.name}
+                      aria-label={`${t.name} theme`}
+                      className={`swatch ${theme === t.name ? "active" : ""}`}
+                      style={{ background: t.bg }}
+                      onClick={() => setTheme(t.name)}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          right: 4,
+                          bottom: 4,
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          background: t.accent,
+                        }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Destructive action — kept visually distinct even when tucked away */}
+              {current && (
+                <button
+                  className="btn btn-ghost danger"
+                  style={{ width: "100%", fontSize: 13 }}
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  Delete project…
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </aside>
 
