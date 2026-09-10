@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readTodos, writeTodos, type Todos } from "@/lib/todos";
+import { readTodos, writeTodos, type TodosFile } from "@/lib/todos";
 import { commitAll } from "@/lib/git";
 
 export const runtime = "nodejs";
@@ -20,15 +20,14 @@ export async function PUT(req: Request) {
   if (!project) {
     return NextResponse.json({ error: "project is required" }, { status: 400 });
   }
-  const body = (await req.json()) as Todos;
-  const todos: Todos = {
-    today: Array.isArray(body?.today) ? body.today : [],
-    week: Array.isArray(body?.week) ? body.week : [],
-    later: Array.isArray(body?.later) ? body.later : [],
+  const body = (await req.json()) as TodosFile;
+  const todos: TodosFile = {
+    items: Array.isArray(body?.items) ? body.items : [],
   };
   await writeTodos(project, todos);
-  const count =
-    todos.today.length + todos.week.length + todos.later.length;
-  const hash = await commitAll(project, `todos: update (${count} items)`);
+  const hash = await commitAll(
+    project,
+    `todos: update (${todos.items.length} items)`
+  );
   return NextResponse.json({ ok: true, commit: hash });
 }

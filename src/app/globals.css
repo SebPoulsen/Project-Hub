@@ -301,42 +301,162 @@ select:focus {
   color: var(--accent);
 }
 
-/* Todos */
-.todo {
+/* ---- To-dos (single add point + computed buckets) ---- */
+.todo-app {
   display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 9px 4px;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* Single add bar — the primary action, sits on top and reads as one control */
+.todo-add {
+  display: flex;
+  gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+}
+.todo-add:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.todo-add-text {
+  flex: 1;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 15px;
+  padding: 8px 8px !important;
+}
+.todo-add-text:focus {
+  outline: none;
+  box-shadow: none !important;
+}
+.todo-add-date {
+  width: auto !important;
+  border: 1px solid var(--border) !important;
+  background: var(--card) !important;
+  font-size: 13px;
+  padding: 8px 10px !important;
+}
+
+/* Buckets */
+.tsection-today .tsection-title {
+  color: var(--accent);
+}
+.tsection-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
 }
-.todo:last-child {
+.tsection-title {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  color: var(--text);
+}
+.tsection-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.tsection-body {
+  display: flex;
+  flex-direction: column;
+}
+.tempty {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 8px 2px;
+}
+
+/* Items */
+.titem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--border);
+}
+.titem:last-child {
   border-bottom: none;
 }
-.todo input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
+.tcheck {
   flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: #12151c;
+  font-size: 12px;
+  line-height: 1;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s;
 }
-.todo .text {
+.tcheck:hover {
+  border-color: var(--accent);
+}
+.tcheck[data-done="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.titem-text {
   flex: 1;
   font-size: 15px;
 }
-.todo.done .text {
+.titem.done .titem-text {
   text-decoration: line-through;
   color: var(--muted);
 }
-.todo .del {
+.titem-del {
   opacity: 0;
   color: var(--muted);
   cursor: pointer;
   background: none;
   border: none;
-  font-size: 16px;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 2px;
 }
-.todo:hover .del {
+.titem:hover .titem-del {
   opacity: 1;
+}
+
+/* Relative due-date chips */
+.due-chip {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.due-today {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.due-soon {
+  color: var(--text);
+}
+.due-overdue {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+.titem.done .due-chip {
+  opacity: 0.5;
 }
 
 .theme-swatches {

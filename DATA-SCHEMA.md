@@ -81,15 +81,22 @@ tags: [example, setup]
 
 ### `todos.json`
 
+A **flat** list. The bucket a todo belongs to (Today / This Week / Later) is
+**not stored** — it's computed live from `due` and the current date, so items
+re-bucket automatically as time passes. Undated items are "Later"; overdue items
+surface in "Today".
+
 ```json
 {
-  "today": [
-    { "id": "a1b2c3d4", "text": "Write my first reflection", "done": false, "due": null, "createdAt": "…" }
-  ],
-  "week": [],
-  "later": []
+  "items": [
+    { "id": "a1b2c3d4", "text": "Write my first reflection", "done": false, "due": "2026-09-10", "createdAt": "…" },
+    { "id": "e5f6g7h8", "text": "Plan company visit", "done": false, "due": null, "createdAt": "…" }
+  ]
 }
 ```
+
+Older files using the `{ "today": [], "week": [], "later": [] }` shape are read
+transparently and migrated to `items` on the next write.
 
 ### `notes/<id>.md`
 

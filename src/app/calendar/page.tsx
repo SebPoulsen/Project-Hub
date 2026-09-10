@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useHub } from "../providers";
 import { DayDetail } from "@/components/DayDetail";
-import type { Todos, Todo } from "@/lib/todos";
+import type { TodosFile, Todo } from "@/lib/todos";
 
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -32,13 +32,11 @@ export default function CalendarPage() {
       .then((res) => setReflectionDates(new Set<string>(res?.dates ?? [])));
     fetch(`/api/todos?project=${encodeURIComponent(current.slug)}`)
       .then((r) => r.json())
-      .then((res: Todos) => {
+      .then((res: TodosFile) => {
         const byDate: Record<string, Todo[]> = {};
-        (["today", "week", "later"] as const).forEach((b) =>
-          res[b]?.forEach((t) => {
-            if (t.due) (byDate[t.due] ??= []).push(t);
-          })
-        );
+        (res.items ?? []).forEach((t) => {
+          if (t.due) (byDate[t.due] ??= []).push(t);
+        });
         setTodosByDate(byDate);
       });
   }, [current]);

@@ -67,7 +67,7 @@ export default function Dashboard() {
                 Manage →
               </Link>
             </div>
-            <TodoList project={current.slug} buckets={["today"]} compact />
+            <TodoList project={current.slug} only="today" showAdd={false} />
           </div>
 
           <div className="card">

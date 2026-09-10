@@ -9,33 +9,46 @@ export interface Todo {
   createdAt: string;
 }
 
-export type Bucket = "today" | "week" | "later";
-
-export interface Todos {
-  today: Todo[];
-  week: Todo[];
-  later: Todo[];
+/**
+ * Storage is a FLAT list. The bucket a todo belongs to (Today / This Week /
+ * Later) is never stored — it's always computed live from `due` + the current
+ * date (see lib/todo-buckets.ts), so re-bucketing on date change is automatic.
+ */
+export interface TodosFile {
+  items: Todo[];
 }
 
-export function emptyTodos(): Todos {
-  return { today: [], week: [], later: [] };
+export function emptyTodos(): TodosFile {
+  return { items: [] };
 }
 
-export async function readTodos(slug: string): Promise<Todos> {
+export async function readTodos(slug: string): Promise<TodosFile> {
   const file = todosFile(slug);
   if (!(await exists(file))) return emptyTodos();
   try {
     const parsed = JSON.parse(await fs.readFile(file, "utf8"));
-    return {
-      today: parsed.today ?? [],
-      week: parsed.week ?? [],
-      later: parsed.later ?? [],
-    };
+    if (Array.isArray(parsed?.items)) {
+      return { items: parsed.items.filter(Boolean) };
+    }
+    // Migrate the old bucketed shape {today,week,later} -> flat items.
+    // The stored bucket is dropped on purpose; it's recomputed from `due`.
+    if (parsed && (parsed.today || parsed.week || parsed.later)) {
+      const items = [
+        ...(parsed.today ?? []),
+        ...(parsed.week ?? []),
+        ...(parsed.later ?? []),
+      ].filter(Boolean);
+      return { items };
+    }
+    return emptyTodos();
   } catch {
     return emptyTodos();
   }
 }
 
-export async function writeTodos(slug: string, todos: Todos): Promise<void> {
-  await fs.writeFile(todosFile(slug), JSON.stringify(todos, null, 2));
+export async function writeTodos(slug: string, todos: TodosFile): Promise<void> {
+  await fs.writeFile(
+    todosFile(slug),
+    JSON.stringify({ items: todos.items ?? [] }, null, 2)
+  );
 }

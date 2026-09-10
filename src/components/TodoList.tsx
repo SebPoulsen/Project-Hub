@@ -2,15 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePendingDeletes } from "@/components/PendingDeletes";
-import type { Todos, Todo, Bucket } from "@/lib/todos";
-
-const EMPTY: Todos = { today: [], week: [], later: [] };
-
-const BUCKET_LABEL: Record<Bucket, string> = {
-  today: "Today",
-  week: "This week",
-  later: "Later",
-};
+import {
+  bucketize,
+  dueLabel,
+  ymd,
+  BUCKET_LABEL,
+  type Bucket,
+} from "@/lib/todo-buckets";
+import type { Todo, TodosFile } from "@/lib/todos";
 
 function newId() {
   try {
@@ -20,54 +19,32 @@ function newId() {
   }
 }
 
-/** Local (not UTC) YYYY-MM-DD to avoid timezone off-by-one on due dates. */
-function ymd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/** Monday–Sunday bounds of the current week, as YYYY-MM-DD. */
-function currentWeekBounds(): { start: string; end: string } {
-  const now = new Date();
-  const offset = (now.getDay() + 6) % 7; // 0 = Monday
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - offset);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  return { start: ymd(monday), end: ymd(sunday) };
-}
-
 export function TodoList({
   project,
-  buckets = ["today", "week", "later"],
-  compact = false,
+  showAdd = true,
+  only,
 }: {
   project: string;
-  buckets?: Bucket[];
-  compact?: boolean;
+  /** Show the single add bar. */
+  showAdd?: boolean;
+  /** Render only this computed bucket, headerless (dashboard glance mode). */
+  only?: Bucket;
 }) {
-  const [todos, setTodos] = useState<Todos>(EMPTY);
+  const [items, setItems] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [drafts, setDrafts] = useState<Record<Bucket, string>>({
-    today: "",
-    week: "",
-    later: "",
-  });
-  const [dueDrafts, setDueDrafts] = useState<Record<Bucket, string>>({
-    today: "",
-    week: "",
-    later: "",
-  });
-  const week = currentWeekBounds();
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latest = useRef<Todos>(EMPTY);
-  latest.current = todos;
-  const { scheduleDelete } = usePendingDeletes();
-  // Ids soft-deleted but still within the undo window: hidden from view, but
-  // kept in state + file so a concurrent save doesn't remove them early.
+  const [text, setText] = useState("");
+  // The add-date defaults to today and resets to today on mount — i.e. whenever
+  // you navigate into To-dos or reload (same derive-fresh idea as the reflection
+  // date fix), never persisting a stale hand-picked date.
+  const [dueDraft, setDueDraft] = useState(() => ymd(new Date()));
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  // Bucketing is a load-time computation (not a live poller), so capture "now"
+  // once per mount. Re-mounting on navigation re-buckets everything.
+  const [now] = useState(() => new Date());
+
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef<Todo[]>([]);
+  latest.current = items;
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -76,12 +53,14 @@ export function TodoList({
     };
   }, []);
 
+  const { scheduleDelete } = usePendingDeletes();
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     fetch(`/api/todos?project=${encodeURIComponent(project)}`)
       .then((r) => r.json())
-      .then((res) => !cancelled && setTodos(res ?? EMPTY))
+      .then((res: TodosFile) => !cancelled && setItems(res?.items ?? []))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -92,75 +71,62 @@ export function TodoList({
     await fetch(`/api/todos?project=${encodeURIComponent(project)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(latest.current),
+      body: JSON.stringify({ items: latest.current }),
     });
   }, [project]);
 
-  // Debounce writes so a burst of toggles becomes one commit.
   const scheduleSave = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(persist, 1000);
   }, [persist]);
 
-  const mutate = (fn: (t: Todos) => Todos) => {
-    setTodos((t) => {
-      const next = fn(structuredCloneSafe(t));
+  const mutate = (fn: (items: Todo[]) => Todo[]) => {
+    setItems((cur) => {
+      const next = fn(cur);
       latest.current = next;
       return next;
     });
     scheduleSave();
   };
 
-  const add = (bucket: Bucket) => {
-    const text = drafts[bucket].trim();
-    if (!text) return;
-    // Only week/later carry an explicit due date; today has no picker.
-    const due = bucket === "today" ? null : dueDrafts[bucket] || null;
+  const add = () => {
+    const t = text.trim();
+    if (!t) return;
     const todo: Todo = {
       id: newId(),
-      text,
+      text: t,
       done: false,
-      due,
+      due: dueDraft || null, // cleared date => Later
       createdAt: new Date().toISOString(),
     };
-    mutate((t) => ({ ...t, [bucket]: [...t[bucket], todo] }));
-    setDrafts((d) => ({ ...d, [bucket]: "" }));
-    setDueDrafts((d) => ({ ...d, [bucket]: "" }));
+    mutate((cur) => [...cur, todo]);
+    setText("");
+    setDueDraft(ymd(new Date())); // reset to today for the next add
   };
 
-  const toggle = (bucket: Bucket, id: string) =>
-    mutate((t) => ({
-      ...t,
-      [bucket]: t[bucket].map((x) =>
-        x.id === id ? { ...x, done: !x.done } : x
-      ),
-    }));
+  const toggle = (id: string) =>
+    mutate((cur) =>
+      cur.map((x) => (x.id === id ? { ...x, done: !x.done } : x))
+    );
 
-  const remove = (bucket: Bucket, id: string) => {
-    const item = latest.current[bucket].find((x) => x.id === id);
-    // Hide immediately (view filter), but keep it in state/file for now.
-    setPendingIds((p) => new Set(p).add(id));
+  const remove = (id: string) => {
+    const item = latest.current.find((x) => x.id === id);
+    setPendingIds((p) => new Set(p).add(id)); // hide immediately
     scheduleDelete({
       label: `To-do "${item?.text ?? ""}" deleted`,
-      // Self-contained so it also works after this component unmounts on nav:
-      // re-read the file, drop the id, write it back.
+      // Self-contained (survives unmount on navigation): re-read, drop, write.
       perform: async () => {
-        const cur: Todos = await fetch(
+        const cur: TodosFile = await fetch(
           `/api/todos?project=${encodeURIComponent(project)}`
         ).then((r) => r.json());
-        (["today", "week", "later"] as Bucket[]).forEach((b) => {
-          cur[b] = (cur[b] ?? []).filter((x) => x.id !== id);
-        });
+        const next = (cur.items ?? []).filter((x) => x.id !== id);
         await fetch(`/api/todos?project=${encodeURIComponent(project)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(cur),
+          body: JSON.stringify({ items: next }),
         });
         if (mounted.current) {
-          setTodos((t) => ({
-            ...t,
-            [bucket]: t[bucket].filter((x) => x.id !== id),
-          }));
+          setItems((cur2) => cur2.filter((x) => x.id !== id));
           setPendingIds((p) => {
             const n = new Set(p);
             n.delete(id);
@@ -179,89 +145,106 @@ export function TodoList({
 
   if (loading) return <div className="muted">Loading…</div>;
 
-  return (
-    <div className="stack" style={{ gap: compact ? 14 : 22 }}>
-      {buckets.map((bucket) => {
-        const visible = todos[bucket].filter((t) => !pendingIds.has(t.id));
-        return (
-        <div key={bucket}>
-          <div className="label" style={{ marginBottom: 8 }}>
-            {BUCKET_LABEL[bucket]} · {visible.length}
-          </div>
-          <div>
-            {visible.length === 0 && (
-              <div className="muted" style={{ fontSize: 14, padding: "4px 0" }}>
-                Nothing here yet.
-              </div>
-            )}
-            {visible.map((t) => (
-              <div key={t.id} className={`todo ${t.done ? "done" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={t.done}
-                  onChange={() => toggle(bucket, t.id)}
-                />
-                <span className="text">{t.text}</span>
-                {t.due && <span className="chip">{t.due}</span>}
-                <button
-                  className="del"
-                  title="Delete"
-                  onClick={() => remove(bucket, t.id)}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="row" style={{ marginTop: 8 }}>
-            <input
-              type="text"
-              placeholder={`Add to ${BUCKET_LABEL[bucket].toLowerCase()}…`}
-              value={drafts[bucket]}
-              onChange={(e) =>
-                setDrafts((d) => ({ ...d, [bucket]: e.target.value }))
-              }
-              onKeyDown={(e) => e.key === "Enter" && add(bucket)}
-            />
-            {bucket === "week" && (
-              <input
-                type="date"
-                title="Due date (within this week)"
-                value={dueDrafts.week}
-                min={week.start}
-                max={week.end}
-                onChange={(e) =>
-                  setDueDrafts((d) => ({ ...d, week: e.target.value }))
-                }
-                style={{ width: "auto" }}
-              />
-            )}
-            {bucket === "later" && (
-              <input
-                type="date"
-                title="Due date"
-                value={dueDrafts.later}
-                onChange={(e) =>
-                  setDueDrafts((d) => ({ ...d, later: e.target.value }))
-                }
-                style={{ width: "auto" }}
-              />
-            )}
-            <button className="btn" onClick={() => add(bucket)}>
-              Add
-            </button>
-          </div>
+  const visible = items.filter((t) => !pendingIds.has(t.id));
+  const buckets = bucketize(visible, now);
+
+  const renderItem = (t: Todo) => {
+    const label = dueLabel(t.due, now);
+    return (
+      <div key={t.id} className={`titem ${t.done ? "done" : ""}`}>
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={t.done}
+          aria-label={t.done ? "Mark not done" : "Mark done"}
+          className="tcheck"
+          data-done={t.done}
+          onClick={() => toggle(t.id)}
+        >
+          {t.done ? "✓" : ""}
+        </button>
+        <span className="titem-text">{t.text}</span>
+        {label && <span className={`due-chip due-${label.tone}`}>{label.text}</span>}
+        <button
+          type="button"
+          className="titem-del"
+          title="Delete"
+          aria-label="Delete task"
+          onClick={() => remove(t.id)}
+        >
+          ×
+        </button>
+      </div>
+    );
+  };
+
+  // Dashboard glance mode: a single computed bucket, no header, no add bar.
+  if (only) {
+    const list = buckets[only];
+    if (list.length === 0)
+      return <div className="muted" style={{ fontSize: 14 }}>Nothing due today.</div>;
+    return <div className="tsection-body">{list.map(renderItem)}</div>;
+  }
+
+  const Section = ({
+    bucket,
+    always,
+  }: {
+    bucket: Bucket;
+    always?: boolean;
+  }) => {
+    const list = buckets[bucket];
+    if (list.length === 0 && !always) return null;
+    return (
+      <div className={`tsection tsection-${bucket}`}>
+        <div className="tsection-head">
+          <span className="tsection-title">{BUCKET_LABEL[bucket]}</span>
+          <span className="tsection-count">{list.length}</span>
         </div>
-        );
-      })}
+        <div className="tsection-body">
+          {list.length === 0 ? (
+            <div className="tempty">Nothing due — clear for now.</div>
+          ) : (
+            list.map(renderItem)
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="todo-app">
+      {showAdd && (
+        <form
+          className="todo-add"
+          onSubmit={(e) => {
+            e.preventDefault();
+            add();
+          }}
+        >
+          <input
+            type="text"
+            className="todo-add-text"
+            placeholder="Add a task…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <input
+            type="date"
+            className="todo-add-date"
+            title="Due date (clear for “Later”)"
+            value={dueDraft}
+            onChange={(e) => setDueDraft(e.target.value)}
+          />
+          <button type="submit" className="btn btn-accent">
+            Add
+          </button>
+        </form>
+      )}
+
+      <Section bucket="today" always />
+      <Section bucket="week" />
+      <Section bucket="later" />
     </div>
   );
-}
-
-function structuredCloneSafe<T>(v: T): T {
-  try {
-    return structuredClone(v);
-  } catch {
-    return JSON.parse(JSON.stringify(v));
-  }
 }

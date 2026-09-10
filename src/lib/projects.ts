@@ -128,12 +128,20 @@ async function seedExamples(project: Project): Promise<void> {
   );
   await fs.writeFile(path.join(reflectionsDir(slug), `${date}.md`), reflectionMd);
 
-  // Example todos.
+  // Example todos (flat list; buckets are computed from `due`). Dates are
+  // chosen so the examples land across Today / This Week / Later.
+  const tomorrow = new Date(new Date(date + "T00:00:00").getTime() + 86400000)
+    .toISOString()
+    .slice(0, 10);
   const todos = emptyTodos();
-  todos.today.push(mkTodo("Write my first real reflection"));
-  todos.today.push(mkTodo("Pick a color palette I like", true));
-  todos.week.push(mkTodo("Add my project's research questions"));
-  todos.later.push(mkTodo("Plan first company visit (Phase 2)"));
+  todos.items.push(mkTodo("Write my first real reflection", { due: date }));
+  todos.items.push(
+    mkTodo("Pick a color palette I like", { due: date, done: true })
+  );
+  todos.items.push(
+    mkTodo("Add my project's research questions", { due: tomorrow })
+  );
+  todos.items.push(mkTodo("Plan first company visit (Phase 2)", { due: null }));
   await fs.writeFile(todosFile(slug), JSON.stringify(todos, null, 2));
 
   // Example note + a placeholder attachment (SVG so no binary is needed).
@@ -159,12 +167,15 @@ async function seedExamples(project: Project): Promise<void> {
   await fs.writeFile(path.join(notesDir(slug), `${date}-welcome.md`), noteMd);
 }
 
-function mkTodo(text: string, done = false) {
+function mkTodo(
+  text: string,
+  opts: { due?: string | null; done?: boolean } = {}
+) {
   return {
     id: cryptoRandomId(),
     text,
-    done,
-    due: null as string | null,
+    done: opts.done ?? false,
+    due: opts.due ?? null,
     createdAt: new Date().toISOString(),
   };
 }
