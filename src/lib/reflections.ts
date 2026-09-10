@@ -46,7 +46,15 @@ export function serializeReflection(
   return lines.join("\n");
 }
 
-/** Parse a reflection file back into structured fields by its stable headings. */
+/**
+ * Parse a reflection file back into structured fields by its stable headings.
+ *
+ * Line-based rather than regex-based: we walk the body, switch the "current
+ * section" whenever a line is one of our known `## Heading`s, and collect the
+ * lines in between. This stays correct when a prompt is left empty (a regex
+ * approach using `\s*\n` would swallow the blank lines and mis-capture the
+ * following heading into the empty section).
+ */
 export function parseReflection(raw: string): ReflectionData {
   const { content, data } = matter(raw);
   const result: ReflectionData = {
@@ -56,11 +64,24 @@ export function parseReflection(raw: string): ReflectionData {
     notes: "",
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
   };
+
+  const headingToKey = new Map(SECTIONS.map((s) => [s.heading, s.key]));
+  const buffers: Partial<Record<keyof ReflectionData, string[]>> = {};
+  let current: keyof ReflectionData | null = null;
+
+  for (const line of content.split("\n")) {
+    const m = line.match(/^##\s+(.*?)\s*$/);
+    if (m && headingToKey.has(m[1])) {
+      current = headingToKey.get(m[1])!;
+      buffers[current] = [];
+      continue;
+    }
+    if (current) buffers[current]!.push(line);
+  }
+
   for (const s of SECTIONS) {
-    const escaped = s.heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(`##\\s*${escaped}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`);
-    const m = content.match(re);
-    if (m) result[s.key] = m[1].trim();
+    const lines = buffers[s.key];
+    if (lines) result[s.key] = lines.join("\n").trim();
   }
   return result;
 }

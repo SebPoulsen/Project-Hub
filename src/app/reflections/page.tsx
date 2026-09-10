@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useHub } from "../providers";
 import { ReflectionEditor } from "@/components/ReflectionEditor";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
+}
+function isDate(s: string | null): s is string {
+  return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 function pretty(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
@@ -16,28 +20,40 @@ function pretty(d: string) {
   });
 }
 
-export default function ReflectionsPage() {
+function ReflectionsInner() {
   const { current, loading } = useHub();
+  const params = useSearchParams();
   const [date, setDate] = useState(todayStr());
   const [dates, setDates] = useState<string[]>([]);
 
-  // Honor ?date=YYYY-MM-DD (e.g. from a calendar click) without needing a
-  // Suspense boundary around useSearchParams.
+  // Date is driven by the URL. On any navigation to this page, honor an
+  // explicit ?date=YYYY-MM-DD (e.g. from a calendar edit link); otherwise
+  // reset to today. Because this reacts to the search params — not just mount —
+  // returning here via the sidebar always lands on today, never a stale date.
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("date");
-    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) setDate(q);
-  }, []);
+    const q = params.get("date");
+    setDate(isDate(q) ? q : todayStr());
+  }, [params]);
 
-  useEffect(() => {
+  const refreshDates = useCallback(() => {
     if (!current) return;
     fetch(`/api/reflections?project=${encodeURIComponent(current.slug)}`)
       .then((r) => r.json())
       .then((res) => setDates(res?.dates ?? []));
-  }, [current, date]);
+  }, [current]);
+
+  useEffect(() => {
+    refreshDates();
+  }, [refreshDates, date]);
 
   if (loading) return <div className="muted">Loading…</div>;
   if (!current)
-    return <div className="empty-state"><h2>No project selected</h2><p>Create or pick a project first.</p></div>;
+    return (
+      <div className="empty-state">
+        <h2>No project selected</h2>
+        <p>Create or pick a project first.</p>
+      </div>
+    );
 
   return (
     <div>
@@ -61,8 +77,15 @@ export default function ReflectionsPage() {
               style={{ width: "auto" }}
             />
           </div>
-          {/* key forces a remount (fresh load + save state) when date changes */}
-          <ReflectionEditor key={date} project={current.slug} date={date} />
+          {/* key forces a remount (fresh load + save state) when date changes.
+              onSaved refreshes the past-entries list so a brand-new date shows
+              up immediately, no manual refresh. */}
+          <ReflectionEditor
+            key={date}
+            project={current.slug}
+            date={date}
+            onSaved={refreshDates}
+          />
         </div>
 
         <div className="card">
@@ -90,5 +113,14 @@ export default function ReflectionsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ReflectionsPage() {
+  // useSearchParams requires a Suspense boundary.
+  return (
+    <Suspense fallback={<div className="muted">Loading…</div>}>
+      <ReflectionsInner />
+    </Suspense>
   );
 }

@@ -36,13 +36,17 @@ const DEBOUNCE_MS = 1500;
 export function ReflectionEditor({
   project,
   date,
+  onSaved,
 }: {
   project: string;
   date: string;
+  /** Called after a successful save (e.g. so the parent can refresh its list). */
+  onSaved?: () => void;
 }) {
   const [data, setData] = useState<ReflectionData>(EMPTY);
   const [state, setState] = useState<SaveState>("idle");
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<ReflectionData>(EMPTY);
   latest.current = data;
@@ -79,7 +83,8 @@ export function ReflectionEditor({
       }
     );
     setState("saved");
-  }, [project, date]);
+    onSaved?.();
+  }, [project, date, onSaved]);
 
   // Debounced autosave: fires 1.5s after the last change — never per keystroke.
   const scheduleSave = useCallback(() => {
@@ -110,6 +115,50 @@ export function ReflectionEditor({
       timer.current = null;
     }
     if (state === "dirty" || state === "saving") save();
+  };
+
+  // Copy the full reflection (all prompts + notes) as plain text.
+  const copyToClipboard = async () => {
+    const d = latest.current;
+    const text = [
+      `Reflection — ${date}`,
+      "",
+      "What did you notice today?",
+      d.noticed.trim() || "—",
+      "",
+      "What did you learn today?",
+      d.learned.trim() || "—",
+      "",
+      "What became clearer today?",
+      d.clearer.trim() || "—",
+      "",
+      "Notes",
+      d.notes.trim() || "—",
+    ].join("\n");
+
+    const done = () => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    };
+    try {
+      await navigator.clipboard.writeText(text);
+      done();
+    } catch {
+      // Clipboard API can be blocked on http/localhost in some browsers.
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        done();
+      } catch {
+        /* give up silently */
+      }
+      document.body.removeChild(ta);
+    }
   };
 
   const label =
@@ -151,9 +200,14 @@ export function ReflectionEditor({
         <span className={`save-state ${state === "saving" ? "saving" : ""}`}>
           {label}
         </span>
-        <button className="btn" onClick={save}>
-          Save now
-        </button>
+        <div className="row" style={{ gap: 6 }}>
+          <button className="btn" onClick={copyToClipboard}>
+            {copied ? "Copied ✓" : "Copy"}
+          </button>
+          <button className="btn" onClick={save}>
+            Save now
+          </button>
+        </div>
       </div>
     </div>
   );

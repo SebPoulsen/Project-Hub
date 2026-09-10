@@ -19,6 +19,25 @@ function newId() {
   }
 }
 
+/** Local (not UTC) YYYY-MM-DD to avoid timezone off-by-one on due dates. */
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Monday–Sunday bounds of the current week, as YYYY-MM-DD. */
+function currentWeekBounds(): { start: string; end: string } {
+  const now = new Date();
+  const offset = (now.getDay() + 6) % 7; // 0 = Monday
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - offset);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return { start: ymd(monday), end: ymd(sunday) };
+}
+
 export function TodoList({
   project,
   buckets = ["today", "week", "later"],
@@ -35,6 +54,12 @@ export function TodoList({
     week: "",
     later: "",
   });
+  const [dueDrafts, setDueDrafts] = useState<Record<Bucket, string>>({
+    today: "",
+    week: "",
+    later: "",
+  });
+  const week = currentWeekBounds();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Todos>(EMPTY);
   latest.current = todos;
@@ -77,15 +102,18 @@ export function TodoList({
   const add = (bucket: Bucket) => {
     const text = drafts[bucket].trim();
     if (!text) return;
+    // Only week/later carry an explicit due date; today has no picker.
+    const due = bucket === "today" ? null : dueDrafts[bucket] || null;
     const todo: Todo = {
       id: newId(),
       text,
       done: false,
-      due: null,
+      due,
       createdAt: new Date().toISOString(),
     };
     mutate((t) => ({ ...t, [bucket]: [...t[bucket], todo] }));
     setDrafts((d) => ({ ...d, [bucket]: "" }));
+    setDueDrafts((d) => ({ ...d, [bucket]: "" }));
   };
 
   const toggle = (bucket: Bucket, id: string) =>
@@ -143,6 +171,30 @@ export function TodoList({
               }
               onKeyDown={(e) => e.key === "Enter" && add(bucket)}
             />
+            {bucket === "week" && (
+              <input
+                type="date"
+                title="Due date (within this week)"
+                value={dueDrafts.week}
+                min={week.start}
+                max={week.end}
+                onChange={(e) =>
+                  setDueDrafts((d) => ({ ...d, week: e.target.value }))
+                }
+                style={{ width: "auto" }}
+              />
+            )}
+            {bucket === "later" && (
+              <input
+                type="date"
+                title="Due date"
+                value={dueDrafts.later}
+                onChange={(e) =>
+                  setDueDrafts((d) => ({ ...d, later: e.target.value }))
+                }
+                style={{ width: "auto" }}
+              />
+            )}
             <button className="btn" onClick={() => add(bucket)}>
               Add
             </button>

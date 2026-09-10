@@ -1,25 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useHub } from "../providers";
-import type { Todos } from "@/lib/todos";
+import { DayDetail } from "@/components/DayDetail";
+import type { Todos, Todo } from "@/lib/todos";
 
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+/** Local (not UTC) YYYY-MM-DD to keep calendar cells timezone-correct. */
 function ymd(d: Date) {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export default function CalendarPage() {
   const { current, loading } = useHub();
-  const router = useRouter();
   const [cursor, setCursor] = useState(() => {
     const n = new Date();
     return new Date(n.getFullYear(), n.getMonth(), 1);
   });
   const [reflectionDates, setReflectionDates] = useState<Set<string>>(new Set());
-  const [dueDates, setDueDates] = useState<Set<string>>(new Set());
+  const [todosByDate, setTodosByDate] = useState<Record<string, Todo[]>>({});
+  const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
     if (!current) return;
@@ -29,11 +33,13 @@ export default function CalendarPage() {
     fetch(`/api/todos?project=${encodeURIComponent(current.slug)}`)
       .then((r) => r.json())
       .then((res: Todos) => {
-        const due = new Set<string>();
+        const byDate: Record<string, Todo[]> = {};
         (["today", "week", "later"] as const).forEach((b) =>
-          res[b]?.forEach((t) => t.due && due.add(t.due))
+          res[b]?.forEach((t) => {
+            if (t.due) (byDate[t.due] ??= []).push(t);
+          })
         );
-        setDueDates(due);
+        setTodosByDate(byDate);
       });
   }, [current]);
 
@@ -41,14 +47,11 @@ export default function CalendarPage() {
     const year = cursor.getFullYear();
     const month = cursor.getMonth();
     const first = new Date(year, month, 1);
-    // getDay: 0=Sun..6=Sat -> convert to Mon-first index
-    const lead = (first.getDay() + 6) % 7;
+    const lead = (first.getDay() + 6) % 7; // Monday-first
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const arr: (string | null)[] = [];
     for (let i = 0; i < lead; i++) arr.push(null);
-    for (let d = 1; d <= daysInMonth; d++) {
-      arr.push(ymd(new Date(year, month, d)));
-    }
+    for (let d = 1; d <= daysInMonth; d++) arr.push(ymd(new Date(year, month, d)));
     while (arr.length % 7 !== 0) arr.push(null);
     return arr;
   }, [cursor]);
@@ -119,7 +122,7 @@ export default function CalendarPage() {
           {cells.map((date, i) => {
             if (!date) return <div key={i} className="cal-cell empty" />;
             const hasReflection = reflectionDates.has(date);
-            const hasDue = dueDates.has(date);
+            const hasDue = (todosByDate[date]?.length ?? 0) > 0;
             const day = Number(date.slice(8, 10));
             return (
               <div
@@ -127,10 +130,8 @@ export default function CalendarPage() {
                 className={`cal-cell ${date === today ? "today" : ""} ${
                   hasReflection ? "has" : ""
                 }`}
-                onClick={() =>
-                  hasReflection && router.push(`/reflections?date=${date}`)
-                }
-                style={{ cursor: hasReflection ? "pointer" : "default" }}
+                onClick={() => setSelected(date)}
+                style={{ cursor: "pointer" }}
               >
                 <span className="cal-num">{day}</span>
                 <div className="row" style={{ gap: 4 }}>
@@ -150,14 +151,28 @@ export default function CalendarPage() {
 
         <div className="row" style={{ gap: 16, marginTop: 16 }}>
           <span className="row" style={{ gap: 6 }}>
-            <span className="cal-dot" /> <span className="muted" style={{ fontSize: 13 }}>Reflection</span>
+            <span className="cal-dot" />{" "}
+            <span className="muted" style={{ fontSize: 13 }}>
+              Reflection
+            </span>
           </span>
           <span className="row" style={{ gap: 6 }}>
             <span className="cal-dot" style={{ background: "var(--muted)" }} />{" "}
-            <span className="muted" style={{ fontSize: 13 }}>To-do due</span>
+            <span className="muted" style={{ fontSize: 13 }}>
+              To-do due
+            </span>
           </span>
         </div>
       </div>
+
+      {selected && (
+        <DayDetail
+          project={current.slug}
+          date={selected}
+          todos={todosByDate[selected] ?? []}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
 }
