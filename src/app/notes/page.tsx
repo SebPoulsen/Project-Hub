@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useHub } from "../providers";
 import { Lightbox } from "@/components/Lightbox";
+import { usePendingDeletes } from "@/components/PendingDeletes";
 import type { Note, NoteMeta } from "@/lib/notes";
 
 type FormMode =
@@ -27,6 +28,7 @@ export default function NotesPage() {
   const [busy, setBusy] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { scheduleDelete } = usePendingDeletes();
 
   async function load() {
     if (!current) return;
@@ -104,16 +106,25 @@ export default function NotesPage() {
     load();
   }
 
-  async function remove(id: string) {
+  function remove(id: string) {
     if (!current) return;
-    if (!confirm("Delete this note? Unused attached images will also be removed.")) {
-      return;
-    }
-    await fetch(
-      `/api/notes?project=${encodeURIComponent(current.slug)}&id=${encodeURIComponent(id)}`,
-      { method: "DELETE" }
-    );
-    load();
+    const slug = current.slug;
+    const note = notes.find((n) => n.id === id);
+    // Hide immediately; the real DELETE (with orphan-attachment cleanup) only
+    // runs after the undo window closes.
+    setNotes((n) => n.filter((x) => x.id !== id));
+    // If this note is open in the editor, close the editor.
+    setMode((m) => (m.kind === "edit" && m.id === id ? { kind: "closed" } : m));
+    scheduleDelete({
+      label: `Note "${note?.title ?? "Untitled"}" deleted`,
+      perform: async () => {
+        await fetch(
+          `/api/notes?project=${encodeURIComponent(slug)}&id=${encodeURIComponent(id)}`,
+          { method: "DELETE" }
+        );
+      },
+      onUndo: () => load(), // file still exists during the window, so it reappears
+    });
   }
 
   if (loading) return <div className="muted">Loading…</div>;

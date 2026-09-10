@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePendingDeletes } from "@/components/PendingDeletes";
 import type { Todos, Todo, Bucket } from "@/lib/todos";
 
 const EMPTY: Todos = { today: [], week: [], later: [] };
@@ -63,6 +64,17 @@ export function TodoList({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Todos>(EMPTY);
   latest.current = todos;
+  const { scheduleDelete } = usePendingDeletes();
+  // Ids soft-deleted but still within the undo window: hidden from view, but
+  // kept in state + file so a concurrent save doesn't remove them early.
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,25 +136,65 @@ export function TodoList({
       ),
     }));
 
-  const remove = (bucket: Bucket, id: string) =>
-    mutate((t) => ({ ...t, [bucket]: t[bucket].filter((x) => x.id !== id) }));
+  const remove = (bucket: Bucket, id: string) => {
+    const item = latest.current[bucket].find((x) => x.id === id);
+    // Hide immediately (view filter), but keep it in state/file for now.
+    setPendingIds((p) => new Set(p).add(id));
+    scheduleDelete({
+      label: `To-do "${item?.text ?? ""}" deleted`,
+      // Self-contained so it also works after this component unmounts on nav:
+      // re-read the file, drop the id, write it back.
+      perform: async () => {
+        const cur: Todos = await fetch(
+          `/api/todos?project=${encodeURIComponent(project)}`
+        ).then((r) => r.json());
+        (["today", "week", "later"] as Bucket[]).forEach((b) => {
+          cur[b] = (cur[b] ?? []).filter((x) => x.id !== id);
+        });
+        await fetch(`/api/todos?project=${encodeURIComponent(project)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cur),
+        });
+        if (mounted.current) {
+          setTodos((t) => ({
+            ...t,
+            [bucket]: t[bucket].filter((x) => x.id !== id),
+          }));
+          setPendingIds((p) => {
+            const n = new Set(p);
+            n.delete(id);
+            return n;
+          });
+        }
+      },
+      onUndo: () =>
+        setPendingIds((p) => {
+          const n = new Set(p);
+          n.delete(id);
+          return n;
+        }),
+    });
+  };
 
   if (loading) return <div className="muted">Loading…</div>;
 
   return (
     <div className="stack" style={{ gap: compact ? 14 : 22 }}>
-      {buckets.map((bucket) => (
+      {buckets.map((bucket) => {
+        const visible = todos[bucket].filter((t) => !pendingIds.has(t.id));
+        return (
         <div key={bucket}>
           <div className="label" style={{ marginBottom: 8 }}>
-            {BUCKET_LABEL[bucket]} · {todos[bucket].length}
+            {BUCKET_LABEL[bucket]} · {visible.length}
           </div>
           <div>
-            {todos[bucket].length === 0 && (
+            {visible.length === 0 && (
               <div className="muted" style={{ fontSize: 14, padding: "4px 0" }}>
                 Nothing here yet.
               </div>
             )}
-            {todos[bucket].map((t) => (
+            {visible.map((t) => (
               <div key={t.id} className={`todo ${t.done ? "done" : ""}`}>
                 <input
                   type="checkbox"
@@ -200,7 +252,8 @@ export function TodoList({
             </button>
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

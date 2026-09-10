@@ -37,11 +37,14 @@ export function ReflectionEditor({
   project,
   date,
   onSaved,
+  onDelete,
 }: {
   project: string;
   date: string;
   /** Called after a successful save (e.g. so the parent can refresh its list). */
   onSaved?: () => void;
+  /** Called when the user deletes this entry (parent handles soft-delete). */
+  onDelete?: () => void;
 }) {
   const [data, setData] = useState<ReflectionData>(EMPTY);
   const [state, setState] = useState<SaveState>("idle");
@@ -197,9 +200,16 @@ export function ReflectionEditor({
         />
       </div>
       <div className="row between">
-        <span className={`save-state ${state === "saving" ? "saving" : ""}`}>
-          {label}
-        </span>
+        <div className="row" style={{ gap: 10 }}>
+          {onDelete && (
+            <button className="btn btn-ghost danger" onClick={onDelete}>
+              Delete
+            </button>
+          )}
+          <span className={`save-state ${state === "saving" ? "saving" : ""}`}>
+            {label}
+          </span>
+        </div>
         <div className="row" style={{ gap: 6 }}>
           <button className="btn" onClick={copyToClipboard}>
             {copied ? "Copied ✓" : "Copy"}

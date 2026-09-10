@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useHub } from "../providers";
 import { ReflectionEditor } from "@/components/ReflectionEditor";
+import { usePendingDeletes } from "@/components/PendingDeletes";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -23,8 +24,14 @@ function pretty(d: string) {
 function ReflectionsInner() {
   const { current, loading } = useHub();
   const params = useSearchParams();
+  const { scheduleDelete } = usePendingDeletes();
   const [date, setDate] = useState(todayStr());
   const [dates, setDates] = useState<string[]>([]);
+  const [editorKey, setEditorKey] = useState(0);
+  // Dates soft-deleted but still within the undo window. The file still exists
+  // on disk during that window, so refreshDates would re-add them — this filter
+  // keeps them hidden until the delete finalizes (or is undone).
+  const [hiddenDates, setHiddenDates] = useState<Set<string>>(new Set());
 
   // Date is driven by the URL. On any navigation to this page, honor an
   // explicit ?date=YYYY-MM-DD (e.g. from a calendar edit link); otherwise
@@ -42,9 +49,54 @@ function ReflectionsInner() {
       .then((res) => setDates(res?.dates ?? []));
   }, [current]);
 
+  // A save means this date has content and should be visible: un-hide it (covers
+  // re-creating a date that was previously deleted) and refresh the list.
+  const handleSaved = useCallback(
+    (savedDate: string) => {
+      setHiddenDates((h) => {
+        if (!h.has(savedDate)) return h;
+        const n = new Set(h);
+        n.delete(savedDate);
+        return n;
+      });
+      refreshDates();
+    },
+    [refreshDates]
+  );
+
   useEffect(() => {
     refreshDates();
   }, [refreshDates, date]);
+
+  const handleDelete = useCallback(
+    (target: string) => {
+      if (!current) return;
+      const slug = current.slug;
+      // Hide from the list (survives refetch via hiddenDates), move the editor
+      // off the deleted entry (remount so no stray autosave writes it back),
+      // then schedule the real delete.
+      setHiddenDates((h) => new Set(h).add(target));
+      setDate(todayStr());
+      setEditorKey((k) => k + 1);
+      scheduleDelete({
+        label: `Reflection for ${target} deleted`,
+        perform: async () => {
+          await fetch(
+            `/api/reflections?project=${encodeURIComponent(slug)}&date=${encodeURIComponent(target)}`,
+            { method: "DELETE" }
+          );
+        },
+        // Undo: unhide (the file was never removed during the window).
+        onUndo: () =>
+          setHiddenDates((h) => {
+            const n = new Set(h);
+            n.delete(target);
+            return n;
+          }),
+      });
+    },
+    [current, scheduleDelete, refreshDates]
+  );
 
   if (loading) return <div className="muted">Loading…</div>;
   if (!current)
@@ -54,6 +106,8 @@ function ReflectionsInner() {
         <p>Create or pick a project first.</p>
       </div>
     );
+
+  const visibleDates = dates.filter((d) => !hiddenDates.has(d));
 
   return (
     <div>
@@ -81,24 +135,25 @@ function ReflectionsInner() {
               onSaved refreshes the past-entries list so a brand-new date shows
               up immediately, no manual refresh. */}
           <ReflectionEditor
-            key={date}
+            key={`${date}:${editorKey}`}
             project={current.slug}
             date={date}
-            onSaved={refreshDates}
+            onSaved={() => handleSaved(date)}
+            onDelete={() => handleDelete(date)}
           />
         </div>
 
         <div className="card">
           <div className="label" style={{ marginBottom: 12 }}>
-            Past entries · {dates.length}
+            Past entries · {visibleDates.length}
           </div>
           <div className="stack" style={{ gap: 4 }}>
-            {dates.length === 0 && (
+            {visibleDates.length === 0 && (
               <div className="muted" style={{ fontSize: 14 }}>
                 No reflections yet.
               </div>
             )}
-            {dates.map((d) => (
+            {visibleDates.map((d) => (
               <button
                 key={d}
                 className={`nav-link ${d === date ? "active" : ""}`}

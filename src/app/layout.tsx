@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import { AppShell } from "@/components/AppShell";
+import { PendingDeletesProvider } from "@/components/PendingDeletes";
 
 export const metadata: Metadata = {
   title: "Project Hub",
@@ -17,7 +18,9 @@ export default function RootLayout({
     <html lang="en" data-theme="dark" suppressHydrationWarning>
       <body>
         <Providers>
-          <AppShell>{children}</AppShell>
+          <PendingDeletesProvider>
+            <AppShell>{children}</AppShell>
+          </PendingDeletesProvider>
         </Providers>
       </body>
     </html>

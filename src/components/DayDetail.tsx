@@ -74,33 +74,7 @@ export function DayDetail({
           </button>
         </div>
 
-        <div className="modal-section">
-          <div className="label" style={{ marginBottom: 6 }}>
-            Reflection
-          </div>
-          {!loaded ? (
-            <div className="muted" style={{ fontSize: 14 }}>
-              Loading…
-            </div>
-          ) : hasReflection ? (
-            <>
-              <div className="reflection-snippet">{snippet}</div>
-              <Link href={`/reflections?date=${date}`} className="link-accent">
-                Edit reflection →
-              </Link>
-            </>
-          ) : (
-            <>
-              <div className="muted" style={{ fontSize: 14, marginBottom: 8 }}>
-                No reflection for this day.
-              </div>
-              <Link href={`/reflections?date=${date}`} className="link-accent">
-                Add reflection →
-              </Link>
-            </>
-          )}
-        </div>
-
+        {/* To-dos first, then the reflection (which can be long). */}
         <div className="modal-section">
           <div className="label" style={{ marginBottom: 8 }}>
             To-dos due · {todos.length}
@@ -136,6 +110,34 @@ export function DayDetail({
           <Link href="/todos" className="link-accent">
             Manage to-dos →
           </Link>
+        </div>
+
+        <div className="modal-section">
+          <div className="label" style={{ marginBottom: 6 }}>
+            Reflection
+          </div>
+          {!loaded ? (
+            <div className="muted" style={{ fontSize: 14 }}>
+              Loading…
+            </div>
+          ) : hasReflection ? (
+            <>
+              {/* Full text, scrollable so a long entry is readable in-place. */}
+              <div className="reflection-snippet">{snippet}</div>
+              <Link href={`/reflections?date=${date}`} className="link-accent">
+                Edit reflection →
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className="muted" style={{ fontSize: 14, marginBottom: 8 }}>
+                No reflection for this day.
+              </div>
+              <Link href={`/reflections?date=${date}`} className="link-accent">
+                Add reflection →
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </div>

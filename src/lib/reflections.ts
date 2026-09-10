@@ -105,6 +105,18 @@ export async function writeReflection(
   await fs.writeFile(reflectionFile(slug, date), md);
 }
 
+/** Delete a reflection file for a date. Reflections don't share attachments,
+ *  so there's no orphan cleanup to do. No-op if the file doesn't exist. */
+export async function deleteReflection(
+  slug: string,
+  date: string
+): Promise<boolean> {
+  const file = reflectionFile(slug, date);
+  if (!(await exists(file))) return false;
+  await fs.unlink(file);
+  return true;
+}
+
 /** List all reflection dates (newest first) for the calendar / index views. */
 export async function listReflectionDates(slug: string): Promise<string[]> {
   const dir = reflectionsDir(slug);
