@@ -49,6 +49,9 @@ export function reflectionFile(slug: string, date: string) {
 export function notesDir(slug: string) {
   return path.join(projectDir(slug), "notes");
 }
+export function meetingsDir(slug: string) {
+  return path.join(projectDir(slug), "meetings");
+}
 export function attachmentsDir(slug: string) {
   return path.join(projectDir(slug), "attachments");
 }
@@ -60,6 +63,9 @@ export function projectFile(slug: string) {
 }
 export function companiesFile(slug: string) {
   return path.join(projectDir(slug), "companies.json");
+}
+export function researchFile(slug: string) {
+  return path.join(projectDir(slug), "research.json");
 }
 export function evaluationsDir(slug: string) {
   return path.join(projectDir(slug), "evaluations");

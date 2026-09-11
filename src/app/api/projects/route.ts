@@ -1,12 +1,35 @@
 import { NextResponse } from "next/server";
-import { listProjects, createProject, deleteProject } from "@/lib/projects";
+import {
+  listProjects,
+  createProject,
+  deleteProject,
+  updateProject,
+} from "@/lib/projects";
 import { readSettings, writeSettings } from "@/lib/settings";
+import { commitAll } from "@/lib/git";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   return NextResponse.json(await listProjects());
+}
+
+export async function PUT(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const slug = searchParams.get("slug");
+  if (!slug) {
+    return NextResponse.json({ error: "slug is required" }, { status: 400 });
+  }
+  const body = await req.json().catch(() => ({}));
+  const patch: Parameters<typeof updateProject>[1] = {};
+  if (body?.placement !== undefined) patch.placement = body.placement;
+  if (typeof body?.name === "string") patch.name = body.name;
+  if (body?.endDate !== undefined) patch.endDate = body.endDate;
+  const project = await updateProject(slug, patch);
+  if (!project) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const hash = await commitAll(slug, `project: update metadata`);
+  return NextResponse.json({ ...project, commit: hash });
 }
 
 export async function POST(req: Request) {

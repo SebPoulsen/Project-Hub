@@ -586,6 +586,137 @@ select:focus {
   cursor: zoom-in;
 }
 
+/* Companies / visits map */
+.companies-map {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  z-index: 0; /* keep tiles/controls under app modals (z 900+) */
+}
+.companies-map .leaflet-container {
+  background: var(--card-2);
+  font-family: var(--font-sans);
+}
+.map-pin {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  border: 2px solid var(--card);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  background: var(--muted);
+}
+.map-pin.planned {
+  background: var(--accent);
+}
+.map-pin.visited {
+  background: #3f9e6a;
+}
+.map-pin.active {
+  outline: 3px solid rgba(0, 0, 0, 0.15);
+}
+/* Permanent pin name labels on the overview map */
+.leaflet-tooltip.map-label {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 7px;
+}
+.leaflet-tooltip.map-label::before {
+  display: none; /* hide the little callout arrow for a cleaner chip look */
+}
+
+/* Highlight pulse when a company card is targeted from a map pin */
+.company-highlight {
+  animation: company-flash 1.6s ease-out;
+}
+@keyframes company-flash {
+  0%,
+  30% {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+  100% {
+    border-color: var(--border);
+    box-shadow: none;
+  }
+}
+
+/* Company cards */
+.company-status {
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: var(--font-sans);
+  font-size: 11px;
+}
+.company-status.visited {
+  background: rgba(63, 158, 106, 0.16);
+  color: #2f7d52;
+}
+
+/* Research tag chip (shown on note cards + note modal) */
+.chip-research {
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  text-decoration: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+a.chip-research:hover {
+  background: var(--accent-soft);
+}
+
+/* Truncated body preview on note cards */
+.note-preview {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* Clickable note cards (open the reading modal) */
+.note-card-click {
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.note-card-click:hover {
+  border-color: var(--accent);
+}
+.note-card-click:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Images inside the note-reading modal — same treatment as note-card images. */
+.note-modal img {
+  display: block;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+  margin-top: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  cursor: zoom-in;
+}
+
 /* Lightbox / full-resolution modal */
 .lightbox-overlay {
   position: fixed;
@@ -843,4 +974,94 @@ select:focus {
 }
 .toast-undo:hover {
   background: var(--accent-soft);
+}
+
+/* Research — question cards + nested findings */
+.rq-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+.rq-head .chev {
+  transition: transform 0.15s ease;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+}
+.rq-head .chev.open {
+  transform: rotate(90deg);
+}
+.rq-title {
+  font-size: 19px;
+  line-height: 1.35;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rq-finding {
+  padding: 10px 2px;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+.rq-finding:first-child {
+  border-top: none;
+}
+.rq-finding-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rq-finding-kind {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-left: 10px;
+}
+.rq-finding-snippet {
+  margin: 4px 0 6px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* Toggle chip (research picker) + answered state */
+.chip-toggle {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding: 4px 10px;
+  margin-right: 0;
+  transition: all 0.12s ease;
+}
+.chip-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.chip-toggle.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.chip-done {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
 }

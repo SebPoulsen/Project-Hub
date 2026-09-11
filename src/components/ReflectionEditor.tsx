@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReflectionData } from "@/lib/reflections";
+import { ResearchPicker } from "@/components/ResearchPicker";
 
 const EMPTY: ReflectionData = {
   noticed: "",
@@ -9,6 +10,7 @@ const EMPTY: ReflectionData = {
   clearer: "",
   notes: "",
   tags: [],
+  research: [],
 };
 
 const PROMPTS: { key: keyof ReflectionData; label: string; ph: string }[] = [
@@ -199,6 +201,14 @@ export function ReflectionEditor({
           onBlur={flushOnBlur}
         />
       </div>
+      <ResearchPicker
+        project={project}
+        selected={data.research}
+        onChange={(ids) => {
+          setData((d) => ({ ...d, research: ids }));
+          scheduleSave();
+        }}
+      />
       <div className="row between">
         <div className="row" style={{ gap: 10 }}>
           {onDelete && (

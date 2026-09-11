@@ -58,13 +58,13 @@ export function PendingDeletesProvider({
   const [toasts, setToasts] = useState<{ id: string; label: string }[]>([]);
   const pending = useRef<Map<string, Entry>>(new Map());
 
-  const finalize = useCallback((id: string) => {
+  const finalize = useCallback((id: string): Promise<void> => {
     const e = pending.current.get(id);
-    if (!e) return;
+    if (!e) return Promise.resolve();
     clearTimeout(e.timer);
     pending.current.delete(id);
     setToasts((t) => t.filter((x) => x.id !== id));
-    Promise.resolve(e.perform()).catch(() => {});
+    return Promise.resolve(e.perform()).catch(() => {});
   }, []);
 
   const undo = useCallback((id: string) => {
@@ -91,14 +91,31 @@ export function PendingDeletesProvider({
   );
 
   // Flush every pending delete when the route changes (confirm-on-navigate).
+  // Sequentially, so collections stored in one shared file (todos.json) finalize
+  // one at a time instead of racing each other's writes.
   const pathname = usePathname();
   const prevPath = useRef(pathname);
   useEffect(() => {
     if (prevPath.current !== pathname) {
       prevPath.current = pathname;
-      [...pending.current.keys()].forEach((id) => finalize(id));
+      const ids = [...pending.current.keys()];
+      void (async () => {
+        for (const id of ids) await finalize(id);
+      })();
     }
   }, [pathname, finalize]);
+
+  // Confirm-on-unload: a full reload / tab close / native navigation never runs
+  // React's route-change or unmount cleanup, so without this the 5s timers die
+  // with the page and every pending delete reappears. `pagehide` fires in those
+  // cases; the performs use keepalive fetches so they still reach the server.
+  useEffect(() => {
+    const onHide = () => {
+      [...pending.current.keys()].forEach((id) => finalize(id));
+    };
+    window.addEventListener("pagehide", onHide);
+    return () => window.removeEventListener("pagehide", onHide);
+  }, [finalize]);
 
   // Safety net: flush anything still pending if the whole app unmounts.
   useEffect(() => {

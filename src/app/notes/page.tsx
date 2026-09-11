@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useHub } from "../providers";
 import { Lightbox } from "@/components/Lightbox";
+import { NoteModal } from "@/components/NoteModal";
 import { usePendingDeletes } from "@/components/PendingDeletes";
+import { ResearchPicker } from "@/components/ResearchPicker";
+import { copyPlainText } from "@/lib/clipboard";
 import type { Note, NoteMeta } from "@/lib/notes";
 
 type FormMode =
@@ -17,13 +21,24 @@ function attachmentUrl(project: string, file: string) {
   )}`;
 }
 
-export default function NotesPage() {
+function NotesInner() {
   const { current, loading } = useHub();
+  const params = useSearchParams();
   const [notes, setNotes] = useState<NoteMeta[]>([]);
+  // rq-id -> question title, for showing research tags on cards + the modal.
+  const [researchTitles, setResearchTitles] = useState<Record<string, string>>(
+    {}
+  );
+  const [copiedAll, setCopiedAll] = useState(false);
+  // Note currently open in the reading modal (also the target of the Research
+  // "Open note →" deep-link: /notes?id=<id>).
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const openId = params.get("id");
   const [mode, setMode] = useState<FormMode>({ kind: "closed" });
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [tags, setTags] = useState("");
+  const [research, setResearch] = useState<string[]>([]); // tagged research-question ids
   const [keep, setKeep] = useState<string[]>([]); // existing attachments to retain (edit)
   const [busy, setBusy] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
@@ -32,10 +47,18 @@ export default function NotesPage() {
 
   async function load() {
     if (!current) return;
-    const list = await fetch(
-      `/api/notes?project=${encodeURIComponent(current.slug)}`
-    ).then((r) => r.json());
+    const [list, research] = await Promise.all([
+      fetch(`/api/notes?project=${encodeURIComponent(current.slug)}`).then((r) =>
+        r.json()
+      ),
+      fetch(`/api/research?project=${encodeURIComponent(current.slug)}`).then(
+        (r) => r.json()
+      ),
+    ]);
     setNotes(list);
+    const map: Record<string, string> = {};
+    for (const q of research?.items ?? []) map[q.id] = q.question;
+    setResearchTitles(map);
   }
 
   useEffect(() => {
@@ -43,10 +66,17 @@ export default function NotesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current]);
 
+  // Deep-link: open the reading modal directly to the note in ?id=. Runs only
+  // when the param changes, so closing the modal doesn't immediately reopen it.
+  useEffect(() => {
+    if (openId) setViewingId(openId);
+  }, [openId]);
+
   function resetForm() {
     setTitle("");
     setBody("");
     setTags("");
+    setResearch([]);
     setKeep([]);
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -64,6 +94,7 @@ export default function NotesPage() {
     setTitle(full.title);
     setBody(stripImageMarkdown(full.body));
     setTags((full.tags ?? []).join(", "));
+    setResearch(full.research ?? []);
     setKeep(full.attachments ?? []);
     if (fileRef.current) fileRef.current.value = "";
     setMode({ kind: "edit", id });
@@ -85,6 +116,7 @@ export default function NotesPage() {
     fd.append("title", title);
     fd.append("body", body);
     fd.append("tags", tags);
+    fd.append("research", research.join(","));
     const files = fileRef.current?.files;
     if (files) for (const f of Array.from(files)) fd.append("files", f);
 
@@ -113,8 +145,9 @@ export default function NotesPage() {
     // Hide immediately; the real DELETE (with orphan-attachment cleanup) only
     // runs after the undo window closes.
     setNotes((n) => n.filter((x) => x.id !== id));
-    // If this note is open in the editor, close the editor.
+    // If this note is open in the editor or reading modal, close it.
     setMode((m) => (m.kind === "edit" && m.id === id ? { kind: "closed" } : m));
+    setViewingId((v) => (v === id ? null : v));
     scheduleDelete({
       label: `Note "${note?.title ?? "Untitled"}" deleted`,
       perform: async () => {
@@ -125,6 +158,33 @@ export default function NotesPage() {
       },
       onUndo: () => load(), // file still exists during the window, so it reappears
     });
+  }
+
+  // Copy every note as plain text, oldest-to-newest, for pasting into a report
+  // or handing to Claude. Mirrors the Reflections "Copy all".
+  async function copyAll() {
+    if (!current) return;
+    const res = await fetch(
+      `/api/notes?project=${encodeURIComponent(current.slug)}&all=1`
+    ).then((r) => r.json());
+    const all: Note[] = res?.notes ?? [];
+    if (all.length === 0) return;
+    const text = all
+      .map((n) =>
+        [
+          `Note — ${n.title || "Untitled"} (${n.date})`,
+          n.tags?.length ? `Tags: ${n.tags.join(", ")}` : "",
+          "",
+          stripImageMarkdown(n.body) || "—",
+        ]
+          .filter((l, i) => !(i === 1 && l === ""))
+          .join("\n")
+      )
+      .join("\n\n────────────────────────\n\n");
+    if (await copyPlainText(text)) {
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 1800);
+    }
   }
 
   if (loading) return <div className="muted">Loading…</div>;
@@ -145,9 +205,16 @@ export default function NotesPage() {
             <h1>Notes</h1>
           </div>
           {mode.kind === "closed" && (
-            <button className="btn btn-accent" onClick={openCreate}>
-              + New note
-            </button>
+            <div className="row" style={{ gap: 6 }}>
+              {notes.length > 0 && (
+                <button className="btn btn-ghost" onClick={copyAll}>
+                  {copiedAll ? "Copied ✓" : "Copy all"}
+                </button>
+              )}
+              <button className="btn btn-accent" onClick={openCreate}>
+                + New note
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -175,6 +242,12 @@ export default function NotesPage() {
               placeholder="Tags (comma separated)"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
+            />
+
+            <ResearchPicker
+              project={current.slug}
+              selected={research}
+              onChange={setResearch}
             />
 
             {/* Existing attachments (edit mode) — click × to drop one */}
@@ -242,12 +315,29 @@ export default function NotesPage() {
             key={n.id}
             project={current.slug}
             meta={n}
-            onImage={setLightbox}
+            researchTitles={researchTitles}
+            onOpen={() => setViewingId(n.id)}
             onEdit={() => openEdit(n.id)}
             onDelete={() => remove(n.id)}
           />
         ))}
       </div>
+
+      {viewingId && (
+        <NoteModal
+          project={current.slug}
+          id={viewingId}
+          researchTitles={researchTitles}
+          onClose={() => setViewingId(null)}
+          onEdit={() => {
+            const id = viewingId;
+            setViewingId(null);
+            openEdit(id);
+          }}
+          onDelete={() => remove(viewingId)}
+          onImage={setLightbox}
+        />
+      )}
 
       {lightbox && <Lightbox src={lightbox} onClose={() => setLightbox(null)} />}
     </div>
@@ -257,71 +347,95 @@ export default function NotesPage() {
 function NoteCard({
   project,
   meta,
-  onImage,
+  researchTitles,
+  onOpen,
   onEdit,
   onDelete,
 }: {
   project: string;
   meta: NoteMeta;
-  onImage: (src: string) => void;
+  researchTitles: Record<string, string>;
+  onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const [note, setNote] = useState<Note | null>(null);
-  const [open, setOpen] = useState(false);
-
-  async function toggle() {
-    if (!open && !note) {
-      const full = await fetch(
-        `/api/notes?project=${encodeURIComponent(project)}&id=${encodeURIComponent(meta.id)}`
-      ).then((r) => r.json());
-      setNote(full);
-    }
-    setOpen((o) => !o);
-  }
-
-  const attachments = (note ?? meta).attachments ?? [];
+  const cover = (meta.attachments ?? [])[0];
+  const linkedQuestions = (meta.research ?? []).filter((id) => researchTitles[id]);
 
   return (
-    <div className="card note-card">
+    <div
+      className="card note-card note-card-click"
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+    >
       <div className="row between">
         <h3 style={{ margin: 0, fontSize: 18 }}>{meta.title}</h3>
         <span className="label">{meta.date}</span>
       </div>
-      {meta.tags?.length > 0 && (
+      {(meta.tags?.length > 0 || linkedQuestions.length > 0) && (
         <div style={{ marginTop: 8 }}>
           {meta.tags.map((t) => (
             <span key={t} className="chip">
               {t}
             </span>
           ))}
+          {linkedQuestions.map((id) => (
+            <span key={id} className="chip chip-research" title={researchTitles[id]}>
+              ◈ {researchTitles[id]}
+            </span>
+          ))}
         </div>
       )}
-      {open && note && (
-        <p style={{ whiteSpace: "pre-wrap", marginTop: 12, lineHeight: 1.55 }}>
-          {stripImageMarkdown(note.body)}
-        </p>
+      {meta.preview && (
+        <p className="note-preview">{meta.preview}</p>
       )}
-      {attachments.map((a) => {
-        const url = attachmentUrl(project, a);
-        return (
-          <img key={a} src={url} alt={a} loading="lazy" onClick={() => onImage(url)} />
-        );
-      })}
-      <div className="row between" style={{ marginTop: 12 }}>
-        <button className="btn btn-ghost" onClick={toggle}>
-          {open ? "Hide" : "Read"}
+      {cover && (
+        // Cover preview only; opening the note is handled by the card click.
+        <img
+          src={attachmentUrl(project, cover)}
+          alt={cover}
+          loading="lazy"
+          style={{ pointerEvents: "none" }}
+        />
+      )}
+      {/* Action buttons stop propagation so they don't also open the modal. */}
+      <div className="row" style={{ justifyContent: "flex-end", gap: 6, marginTop: 12 }}>
+        <button
+          className="btn btn-ghost"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
+        >
+          Edit
         </button>
-        <div className="row" style={{ gap: 6 }}>
-          <button className="btn btn-ghost" onClick={onEdit}>
-            Edit
-          </button>
-          <button className="btn btn-ghost danger" onClick={onDelete}>
-            Delete
-          </button>
-        </div>
+        <button
+          className="btn btn-ghost danger"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          Delete
+        </button>
       </div>
     </div>
+  );
+}
+
+export default function NotesPage() {
+  // useSearchParams requires a Suspense boundary.
+  return (
+    <Suspense fallback={<div className="muted">Loading…</div>}>
+      <NotesInner />
+    </Suspense>
   );
 }
 

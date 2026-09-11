@@ -14,6 +14,27 @@ export interface NoteMeta {
   date: string;
   tags: string[];
   attachments: string[];
+  /** Research-question ids this note is tagged to (see lib/research.ts). */
+  research: string[];
+  /** Short plain-text preview of the body (list cards). Set by listNotes. */
+  preview?: string;
+}
+
+/** Build a truncated, image-stripped one-line preview of a note body. */
+function makePreview(content: string, max = 140): string {
+  const flat = content
+    .split("\n")
+    .filter((line) => !/^!\[.*\]\(.*\)\s*$/.test(line.trim()))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (flat.length <= max) return flat;
+  // Prefer to cut at the first sentence end within range, else at a word.
+  const slice = flat.slice(0, max);
+  const sentence = slice.match(/^.*?[.!?](?=\s|$)/);
+  if (sentence && sentence[0].length >= 40) return sentence[0].trim();
+  const lastSpace = slice.lastIndexOf(" ");
+  return (lastSpace > 40 ? slice.slice(0, lastSpace) : slice).trim() + "…";
 }
 
 export interface Note extends NoteMeta {
@@ -44,7 +65,7 @@ export async function listNotes(slug: string): Promise<NoteMeta[]> {
   const notes: NoteMeta[] = [];
   for (const f of files) {
     const raw = await fs.readFile(path.join(dir, f), "utf8");
-    const { data } = matter(raw);
+    const { data, content } = matter(raw);
     notes.push({
       id: f.replace(/\.md$/, ""),
       title: String(data.title ?? f.replace(/\.md$/, "")),
@@ -53,10 +74,23 @@ export async function listNotes(slug: string): Promise<NoteMeta[]> {
       attachments: Array.isArray(data.attachments)
         ? data.attachments.map(String)
         : [],
+      research: Array.isArray(data.research) ? data.research.map(String) : [],
+      preview: makePreview(content),
     });
   }
   notes.sort((a, b) => (a.id < b.id ? 1 : -1));
   return notes;
+}
+
+/** Read every note for a project in full, oldest-first (for "Copy all"). */
+export async function readAllNotes(slug: string): Promise<Note[]> {
+  const metas = await listNotes(slug); // newest-first
+  const out: Note[] = [];
+  for (const m of metas.slice().reverse()) {
+    const note = await readNote(slug, m.id);
+    if (note) out.push(note);
+  }
+  return out;
 }
 
 export async function readNote(slug: string, id: string): Promise<Note | null> {
@@ -72,6 +106,7 @@ export async function readNote(slug: string, id: string): Promise<Note | null> {
     attachments: Array.isArray(data.attachments)
       ? data.attachments.map(String)
       : [],
+    research: Array.isArray(data.research) ? data.research.map(String) : [],
     body: content.trim(),
   };
 }
@@ -86,6 +121,7 @@ export interface CreateNoteInput {
   title: string;
   body: string;
   tags: string[];
+  research: string[];
   attachments: { filename: string; bytes: Buffer }[];
 }
 
@@ -123,6 +159,7 @@ export async function createNote(
   }
 
   const tags = input.tags.length ? `[${input.tags.join(", ")}]` : "[]";
+  const research = input.research.length ? `[${input.research.join(", ")}]` : "[]";
   const attachYaml = savedNames.length ? `[${savedNames.join(", ")}]` : "[]";
   const imageBlock = savedNames
     .map((f) => `![${f}](../attachments/${f})`)
@@ -134,6 +171,7 @@ export async function createNote(
     `date: ${date}`,
     `project: ${slug}`,
     `tags: ${tags}`,
+    `research: ${research}`,
     `attachments: ${attachYaml}`,
     "---",
     "",
@@ -149,6 +187,7 @@ export async function createNote(
     date,
     tags: input.tags,
     attachments: savedNames,
+    research: input.research,
     body: input.body.trim(),
   };
 }
@@ -157,6 +196,7 @@ export interface UpdateNoteInput {
   title: string;
   body: string; // clean body text WITHOUT the trailing image markdown block
   tags: string[];
+  research: string[];
   keepAttachments: string[]; // existing attachment filenames to retain
   newAttachments: { filename: string; bytes: Buffer }[];
 }
@@ -191,6 +231,7 @@ export async function updateNote(
 
   const finalAttachments = [...input.keepAttachments, ...savedNew];
   const tags = input.tags.length ? `[${input.tags.join(", ")}]` : "[]";
+  const research = input.research.length ? `[${input.research.join(", ")}]` : "[]";
   const attachYaml = finalAttachments.length
     ? `[${finalAttachments.join(", ")}]`
     : "[]";
@@ -204,6 +245,7 @@ export async function updateNote(
     `date: ${existing.date}`,
     `project: ${slug}`,
     `tags: ${tags}`,
+    `research: ${research}`,
     `attachments: ${attachYaml}`,
     "---",
     "",
@@ -225,6 +267,7 @@ export async function updateNote(
     date: existing.date,
     tags: input.tags,
     attachments: finalAttachments,
+    research: input.research,
     body: input.body.trim(),
   };
 }

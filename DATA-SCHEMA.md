@@ -28,9 +28,12 @@ to Claude directly. No database, no export step.
   todos.json               ← { today: [], week: [], later: [] }
   notes/
     2026-09-10-welcome.md
+  meetings/
+    2026-09-10-weekly-sync.md    ← meeting notes (Phase 2)
   attachments/
     2026-09-10-welcome-photo.jpg
-  companies.json           ← [] (used in Phase 2)
+  research.json            ← { items: [] } research questions (Phase 2)
+  companies.json           ← { items: [] } companies/visits (Phase 2)
   evaluations/             ← (used in Phase 2)
   .git/                    ← auto-init, one commit per save
 ```
@@ -44,10 +47,20 @@ to Claude directly. No database, no export step.
   "startDate": "2026-09-10",
   "endDate": null,
   "researchQuestions": [],
-  "placement": { "primary": "", "secondary": "" },
+  "placement": {
+    "primary":   { "organisation": "", "location": "", "supervisor": "",
+                   "contactEmail": "", "focus": "", "startDate": null, "endDate": null },
+    "secondary": { "organisation": "", "location": "", "supervisor": "",
+                   "contactEmail": "", "focus": "", "startDate": null, "endDate": null }
+  },
   "createdAt": "2026-09-10T…"
 }
 ```
+
+`placement` is structured project-level metadata (Phase 2). Pre–Phase 2 projects
+stored `primary`/`secondary` as bare strings; those are migrated on read into the
+object above (the old string becomes `organisation`). `researchQuestions` is a
+legacy field — questions now live in `research.json`.
 
 ### `reflections/YYYY-MM-DD.md`
 
@@ -116,3 +129,71 @@ Body text…
 
 Attachments live in the sibling `attachments/` folder and are referenced by
 relative path, so a project folder is fully self-contained and portable.
+
+### `meetings/<id>.md`
+
+Meeting notes — structured logging of meetings that already happened (paste a
+transcript or notes). Same file pattern as notes, but a distinct type: no
+attachments, plus a `meeting` field naming the meeting/series it belongs to (the
+UI tags and filters by it).
+
+```markdown
+---
+title: Kickoff with mentor
+meeting: Weekly sync
+date: 2026-09-10
+project: my-first-project
+tags: [planning]
+---
+
+Pasted transcript / notes…
+```
+
+### `research.json`
+
+Research questions are their own flat collection (parallel to `todos.json`), so
+editing a question never rewrites `project.json`. The `researchQuestions` field
+on `project.json` is legacy; pre–Phase 2 projects are migrated into this file on
+first read.
+
+```json
+{
+  "items": [
+    { "id": "rq-a1b2c3d4", "question": "How do makerspaces sustain funding?",
+      "detail": "", "status": "open", "createdAt": "…" }
+  ]
+}
+```
+
+### `companies.json`
+
+The visits tracker — a flat collection. `status` is `"planned"` (an idea to
+visit) or `"visited"`. `lat`/`lng` are optional; a company without them just has
+no map pin yet. The Phase-1 placeholder shape (a bare `[]`) is read and migrated
+to `{ items }` on the next write.
+
+```json
+{
+  "items": [
+    { "id": "co-a1b2c3d4", "name": "FabLab Oslo", "status": "visited",
+      "address": "Oslo, Norway", "website": "", "notes": "",
+      "lat": 59.9139, "lng": 10.7522, "visitDate": "2026-09-15", "createdAt": "…" }
+  ]
+}
+```
+
+Coordinates are set by geocoding the address (OpenStreetMap Nominatim, on an
+explicit "Find on map" click) or by clicking/dragging the pin on the map. The
+map view uses Leaflet + OpenStreetMap tiles.
+
+### Research findings
+
+**Findings are not stored here.** A question's nested findings are computed live
+by scanning which reflections and notes tagged themselves to its id via a
+`research: [rq-…]` frontmatter list — the same "derive from source, never
+hand-assign" rule as the to-do buckets. So both `reflections/*.md` and
+`notes/*.md` carry an extra frontmatter line:
+
+```yaml
+research: [rq-a1b2c3d4]
+```

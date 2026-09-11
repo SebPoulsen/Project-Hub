@@ -50,6 +50,7 @@ export async function PUT(req: Request) {
     clearer: String(body?.clearer ?? ""),
     notes: String(body?.notes ?? ""),
     tags: Array.isArray(body?.tags) ? body.tags.map(String) : [],
+    research: Array.isArray(body?.research) ? body.research.map(String) : [],
   };
   await writeReflection(project, date, data);
 

@@ -9,14 +9,25 @@ import {
   projectFile,
   reflectionsDir,
   notesDir,
+  meetingsDir,
   attachmentsDir,
   todosFile,
   companiesFile,
+  researchFile,
   evaluationsDir,
 } from "./paths";
 import { commitAll } from "./git";
 import { serializeReflection } from "./reflections";
 import { emptyTodos } from "./todos";
+
+import {
+  type Placement,
+  emptyPlacement,
+  normalizePlacement,
+} from "./placement";
+
+// Re-export the placement API so existing `@/lib/projects` importers keep working.
+export * from "./placement";
 
 export interface Project {
   name: string;
@@ -24,12 +35,27 @@ export interface Project {
   startDate: string;
   endDate: string | null;
   researchQuestions: string[];
-  placement: { primary: string; secondary: string };
+  placement: Placement;
   createdAt: string;
 }
 
 export function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Normalize a parsed project.json into a well-formed Project. */
+function normalizeProject(raw: Record<string, unknown>): Project {
+  return {
+    name: String(raw.name ?? "Untitled project"),
+    slug: String(raw.slug ?? ""),
+    startDate: String(raw.startDate ?? today()),
+    endDate: raw.endDate ? String(raw.endDate) : null,
+    researchQuestions: Array.isArray(raw.researchQuestions)
+      ? (raw.researchQuestions as unknown[]).map(String)
+      : [],
+    placement: normalizePlacement(raw.placement),
+    createdAt: String(raw.createdAt ?? new Date().toISOString()),
+  };
 }
 
 export async function listProjects(): Promise<Project[]> {
@@ -42,7 +68,7 @@ export async function listProjects(): Promise<Project[]> {
     if (await exists(pf)) {
       try {
         const raw = await fs.readFile(pf, "utf8");
-        projects.push(JSON.parse(raw));
+        projects.push(normalizeProject(JSON.parse(raw)));
       } catch {
         // Skip folders with an unreadable project.json rather than crashing.
       }
@@ -55,7 +81,31 @@ export async function listProjects(): Promise<Project[]> {
 export async function getProject(slug: string): Promise<Project | null> {
   const pf = projectFile(slug);
   if (!(await exists(pf))) return null;
-  return JSON.parse(await fs.readFile(pf, "utf8"));
+  return normalizeProject(JSON.parse(await fs.readFile(pf, "utf8")));
+}
+
+/**
+ * Merge a partial update into project.json (currently used for placement).
+ * Reads the raw file, applies the patch, normalizes, and writes it back — the
+ * caller commits.
+ */
+export async function updateProject(
+  slug: string,
+  patch: Partial<Pick<Project, "name" | "endDate" | "placement">>
+): Promise<Project | null> {
+  const pf = projectFile(slug);
+  if (!(await exists(pf))) return null;
+  const raw = JSON.parse(await fs.readFile(pf, "utf8"));
+  const next = {
+    ...raw,
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.endDate !== undefined ? { endDate: patch.endDate } : {}),
+    ...(patch.placement !== undefined
+      ? { placement: normalizePlacement(patch.placement) }
+      : {}),
+  };
+  await fs.writeFile(pf, JSON.stringify(next, null, 2));
+  return normalizeProject(next);
 }
 
 /**
@@ -99,19 +149,26 @@ export async function createProject(
     startDate: today(),
     endDate: null,
     researchQuestions: [],
-    placement: { primary: "", secondary: "" },
+    placement: emptyPlacement(),
     createdAt: new Date().toISOString(),
   };
 
   // Scaffold the folder structure.
   await fs.mkdir(reflectionsDir(slug), { recursive: true });
   await fs.mkdir(notesDir(slug), { recursive: true });
+  await fs.mkdir(meetingsDir(slug), { recursive: true });
   await fs.mkdir(attachmentsDir(slug), { recursive: true });
   await fs.mkdir(evaluationsDir(slug), { recursive: true });
 
   await fs.writeFile(projectFile(slug), JSON.stringify(project, null, 2));
   await fs.writeFile(todosFile(slug), JSON.stringify(emptyTodos(), null, 2));
-  await fs.writeFile(companiesFile(slug), JSON.stringify([], null, 2));
+  await fs.writeFile(companiesFile(slug), JSON.stringify({ items: [] }, null, 2));
+  // Research questions live in their own flat collection (Phase 2). project.json
+  // keeps its (now-legacy) researchQuestions field only for back-compat reads.
+  await fs.writeFile(
+    researchFile(slug),
+    JSON.stringify({ items: [] }, null, 2)
+  );
   // Keep the (Phase 2) evaluations dir tracked by git even while empty.
   await fs.writeFile(path.join(evaluationsDir(slug), ".gitkeep"), "");
 
@@ -138,6 +195,7 @@ async function seedExamples(project: Project): Promise<void> {
       notes:
         "This is an example entry. Edit or delete it. Tip: hand this whole folder to Claude anytime.",
       tags: ["example", "setup"],
+      research: [],
     },
     { date, project: slug }
   );

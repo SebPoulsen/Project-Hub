@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   listNotes,
   readNote,
+  readAllNotes,
   createNote,
   updateNote,
   deleteNote,
@@ -16,6 +17,10 @@ export async function GET(req: Request) {
   const project = searchParams.get("project");
   if (!project) {
     return NextResponse.json({ error: "project is required" }, { status: 400 });
+  }
+  if (searchParams.get("all")) {
+    // Full content of every note, oldest-first (for "Copy all").
+    return NextResponse.json({ notes: await readAllNotes(project) });
   }
   const id = searchParams.get("id");
   if (id) {
@@ -41,6 +46,10 @@ export async function POST(req: Request) {
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
+  const research = String(form.get("research") ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
 
   const attachments: { filename: string; bytes: Buffer }[] = [];
   for (const entry of form.getAll("files")) {
@@ -50,7 +59,13 @@ export async function POST(req: Request) {
     }
   }
 
-  const note = await createNote(project, { title, body: bodyText, tags, attachments });
+  const note = await createNote(project, {
+    title,
+    body: bodyText,
+    tags,
+    research,
+    attachments,
+  });
   const hash = await commitAll(
     project,
     `note: ${note.id}${attachments.length ? ` (+${attachments.length} attachment${attachments.length > 1 ? "s" : ""})` : ""}`
@@ -76,6 +91,10 @@ export async function PUT(req: Request) {
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
+  const research = String(form.get("research") ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
   const keepAttachments = String(form.get("keep") ?? "")
     .split(",")
     .map((t) => t.trim())
@@ -95,6 +114,7 @@ export async function PUT(req: Request) {
     title,
     body: bodyText,
     tags,
+    research,
     keepAttachments,
     newAttachments,
   });

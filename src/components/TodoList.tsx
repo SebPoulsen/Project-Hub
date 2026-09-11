@@ -166,15 +166,14 @@ export function TodoList({
     scheduleDelete({
       label: `To-do "${item?.text ?? ""}" deleted`,
       perform: async () => {
-        const cur: TodosFile = await fetch(
-          `/api/todos?project=${encodeURIComponent(project)}`
-        ).then((r) => r.json());
-        const next = (cur.items ?? []).filter((x) => x.id !== id);
-        await fetch(`/api/todos?project=${encodeURIComponent(project)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: next }),
-        });
+        // One atomic, id-scoped delete — the server removes just this item under
+        // a per-project lock. No read-modify-write of the whole list (which
+        // raced when several finalized at once), and `keepalive` lets the
+        // request finish even if the page is navigating away or reloading.
+        await fetch(
+          `/api/todos?project=${encodeURIComponent(project)}&id=${encodeURIComponent(id)}`,
+          { method: "DELETE", keepalive: true }
+        );
         if (mounted.current) {
           setItems((cur2) => cur2.filter((x) => x.id !== id));
           setPendingIds((p) => {

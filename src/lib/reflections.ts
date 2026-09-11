@@ -12,6 +12,8 @@ export interface ReflectionData {
   clearer: string;
   notes: string;
   tags: string[];
+  /** Research-question ids this reflection is tagged to (see lib/research.ts). */
+  research: string[];
 }
 
 export interface ReflectionMeta {
@@ -19,7 +21,9 @@ export interface ReflectionMeta {
   project: string;
 }
 
-const SECTIONS: { key: keyof ReflectionData; heading: string }[] = [
+type TextKey = "noticed" | "learned" | "clearer" | "notes";
+
+const SECTIONS: { key: TextKey; heading: string }[] = [
   { key: "noticed", heading: "What did you notice today?" },
   { key: "learned", heading: "What did you learn today?" },
   { key: "clearer", heading: "What became clearer today?" },
@@ -32,11 +36,13 @@ export function serializeReflection(
   meta: ReflectionMeta
 ): string {
   const tags = data.tags?.length ? `[${data.tags.join(", ")}]` : "[]";
+  const research = data.research?.length ? `[${data.research.join(", ")}]` : "[]";
   const lines = [
     "---",
     `date: ${meta.date}`,
     `project: ${meta.project}`,
     `tags: ${tags}`,
+    `research: ${research}`,
     "---",
     "",
   ];
@@ -63,6 +69,7 @@ export function parseReflection(raw: string): ReflectionData {
     clearer: "",
     notes: "",
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
+    research: Array.isArray(data.research) ? data.research.map(String) : [],
   };
 
   const headingToKey = new Map(SECTIONS.map((s) => [s.heading, s.key]));
