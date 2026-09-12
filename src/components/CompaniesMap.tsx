@@ -56,24 +56,35 @@ export default function CompaniesMap({
     if (!elRef.current || mapRef.current) return;
     // Default view: Aarhus, Denmark, moderately zoomed — so a new entry doesn't
     // start on a full world view. Overridden by fitBounds when pins exist.
-    const map = L.map(elRef.current, { scrollWheelZoom: true }).setView(
-      [56.1629, 10.2039],
-      11
-    );
+    // fadeAnimation:false is deliberate, not cosmetic: with the tile fade on,
+    // Leaflet's GridLayer._tileReady schedules a requestAnimFrame(_updateOpacity)
+    // and a setTimeout(_pruneTiles, 250) whose ids it never stores, so
+    // map.remove() can't cancel them. If the map is unmounted (navigating away)
+    // within that window they fire against a map whose _mapPane has been deleted
+    // → getPosition(undefined) → "Cannot read properties of undefined
+    // (reading '_leaflet_pos')". Disabling fade removes those deferred callbacks.
+    const map = L.map(elRef.current, {
+      scrollWheelZoom: true,
+      fadeAnimation: false,
+    }).setView([56.1629, 10.2039], 11, { animate: false });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors",
       maxZoom: 19,
     }).addTo(map);
     markersRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-    // The container may size after mount; recalc so tiles fill it.
-    setTimeout(() => map.invalidateSize(), 0);
+    // The container may size after mount; recalc so tiles fill it. Cancel on
+    // unmount and guard, so this never runs against a removed map.
+    const sizeTimer = setTimeout(() => {
+      if (mapRef.current === map) map.invalidateSize(false);
+    }, 0);
 
     map.on("click", (e: L.LeafletMouseEvent) => {
       onPickRef.current?.(e.latlng.lat, e.latlng.lng);
     });
 
     return () => {
+      clearTimeout(sizeTimer);
       map.remove();
       mapRef.current = null;
       markersRef.current = null;
@@ -114,10 +125,12 @@ export default function CompaniesMap({
       m.addTo(group);
       pts.push([c.lat as number, c.lng as number]);
     }
+    // animate:false — an in-flight pan/zoom animation left running when the map
+    // is removed on navigation is another source of the _leaflet_pos crash.
     if (pts.length === 1) {
-      map.setView(pts[0], 12);
+      map.setView(pts[0], 12, { animate: false });
     } else if (pts.length > 1) {
-      map.fitBounds(L.latLngBounds(pts).pad(0.2));
+      map.fitBounds(L.latLngBounds(pts).pad(0.2), { animate: false });
     }
   }, [companies, pickMode]);
 
@@ -138,7 +151,9 @@ export default function CompaniesMap({
       } else {
         pickRef.current.setLatLng([pick.lat, pick.lng]);
       }
-      map.setView([pick.lat, pick.lng], Math.max(map.getZoom(), 12));
+      map.setView([pick.lat, pick.lng], Math.max(map.getZoom(), 12), {
+        animate: false,
+      });
     } else if (pickRef.current) {
       map.removeLayer(pickRef.current);
       pickRef.current = null;
