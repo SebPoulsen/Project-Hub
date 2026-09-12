@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useScrollLock } from "@/lib/useScrollLock";
+import { PLACEMENT_LABEL } from "@/lib/placement-tag";
 import type { ReflectionData } from "@/lib/reflections";
 import type { Todo } from "@/lib/todos";
+import type { CalendarEvent } from "@/lib/events";
+import type { Company } from "@/lib/companies";
 
 function pretty(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
@@ -22,19 +25,38 @@ function reflectionSnippet(r: ReflectionData): string {
     .join("\n\n");
 }
 
+/** "14:00–16:00", "14:00", or "All day" when no time is set. */
+function timeLabel(e: CalendarEvent): string {
+  if (!e.startTime) return "All day";
+  return e.endTime ? `${e.startTime}–${e.endTime}` : e.startTime;
+}
+
 /**
- * Day-detail popover shown when a calendar date is clicked. Shows BOTH that
- * day's reflection (if any) and any to-dos due that day, each with an edit link.
+ * Day-detail popover shown when a calendar date is clicked. Shows, in order:
+ * that day's Events (scheduled things, with add/edit/delete), To-dos due, and
+ * the day's Reflection (kept last as it can be long). Event mutation state is
+ * owned by the calendar and delegated here via callbacks, so a soft-delete's
+ * undo survives this popover closing.
  */
 export function DayDetail({
   project,
   date,
   todos,
+  events,
+  companies,
+  onAddEvent,
+  onEditEvent,
+  onDeleteEvent,
   onClose,
 }: {
   project: string;
   date: string;
   todos: Todo[];
+  events: CalendarEvent[];
+  companies: Company[];
+  onAddEvent: () => void;
+  onEditEvent: (e: CalendarEvent) => void;
+  onDeleteEvent: (e: CalendarEvent) => void;
   onClose: () => void;
 }) {
   const [reflection, setReflection] = useState<ReflectionData | null>(null);
@@ -63,6 +85,9 @@ export function DayDetail({
     };
   }, [project, date]);
 
+  const companyName = (id: string | null) =>
+    id ? companies.find((c) => c.id === id)?.name ?? null : null;
+
   const snippet = reflection ? reflectionSnippet(reflection) : "";
   const hasReflection = snippet.length > 0;
 
@@ -76,7 +101,88 @@ export function DayDetail({
           </button>
         </div>
 
-        {/* To-dos first, then the reflection (which can be long). */}
+        {/* Events first (scheduled things), then to-dos, then the reflection. */}
+        <div className="modal-section">
+          <div className="row between" style={{ marginBottom: 8 }}>
+            <span className="label">Events · {events.length}</span>
+            <button className="btn btn-ghost" onClick={onAddEvent}>
+              + Add event
+            </button>
+          </div>
+          {events.length === 0 ? (
+            <div className="muted" style={{ fontSize: 14 }}>
+              Nothing scheduled this day.
+            </div>
+          ) : (
+            <div className="stack" style={{ gap: 8 }}>
+              {events.map((e) => {
+                const cname = companyName(e.companyId);
+                return (
+                  <div key={e.id} className="event-row">
+                    <div className="row between" style={{ gap: 8 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="row" style={{ gap: 8, alignItems: "baseline" }}>
+                          <span className="event-time">{timeLabel(e)}</span>
+                          <span className="event-title">{e.title}</span>
+                        </div>
+                        {(cname || e.placement || e.notes) && (
+                          <div
+                            className="row"
+                            style={{ gap: 6, marginTop: 4, flexWrap: "wrap" }}
+                          >
+                            {cname && (
+                              <Link
+                                href={`/companies?focus=${encodeURIComponent(e.companyId as string)}`}
+                                className="chip chip-research"
+                              >
+                                🏢 {cname}
+                              </Link>
+                            )}
+                            {e.placement && (
+                              <span className="chip chip-placement">
+                                {PLACEMENT_LABEL[e.placement]}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {e.notes && (
+                          <div
+                            className="muted"
+                            style={{
+                              fontSize: 13,
+                              marginTop: 4,
+                              whiteSpace: "pre-wrap",
+                              overflowWrap: "anywhere",
+                            }}
+                          >
+                            {e.notes}
+                          </div>
+                        )}
+                      </div>
+                      <div className="row" style={{ gap: 2, flexShrink: 0 }}>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ padding: "4px 8px" }}
+                          onClick={() => onEditEvent(e)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn btn-ghost danger"
+                          style={{ padding: "4px 8px" }}
+                          onClick={() => onDeleteEvent(e)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="modal-section">
           <div className="label" style={{ marginBottom: 8 }}>
             To-dos due · {todos.length}

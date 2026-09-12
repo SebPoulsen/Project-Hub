@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useHub } from "../providers";
 import { usePendingDeletes } from "@/components/PendingDeletes";
@@ -13,6 +14,7 @@ import {
   type PlacementFilterValue,
 } from "@/lib/placement-tag";
 import type { Company, CompanyStatus } from "@/lib/companies";
+import type { CalendarEvent } from "@/lib/events";
 
 // Leaflet touches window at import — load the map client-only.
 const CompaniesMap = dynamic(() => import("@/components/CompaniesMap"), {
@@ -25,6 +27,14 @@ const CompaniesMap = dynamic(() => import("@/components/CompaniesMap"), {
     </div>
   ),
 });
+
+/** "2026-09-20" -> "Sep 20", for the compact event back-links on a card. */
+function shortDate(d: string): string {
+  return new Date(d + "T00:00:00").toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
 
 type FormMode =
   | { kind: "closed" }
@@ -60,6 +70,9 @@ export default function CompaniesPage() {
   const { scheduleDelete } = usePendingDeletes();
 
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [eventsByCompany, setEventsByCompany] = useState<
+    Record<string, CalendarEvent[]>
+  >({});
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [placeFilter, setPlaceFilter] = useState<PlacementFilterValue>("all");
@@ -72,15 +85,47 @@ export default function CompaniesPage() {
 
   const load = useCallback(async () => {
     if (!current) return;
-    const res = await fetch(
-      `/api/companies?project=${encodeURIComponent(current.slug)}`
-    ).then((r) => r.json());
-    setCompanies(res?.items ?? []);
+    const [cRes, eRes] = await Promise.all([
+      fetch(`/api/companies?project=${encodeURIComponent(current.slug)}`).then(
+        (r) => r.json()
+      ),
+      fetch(`/api/events?project=${encodeURIComponent(current.slug)}`).then((r) =>
+        r.json()
+      ),
+    ]);
+    setCompanies(cRes?.items ?? []);
+    // Group events under the company they reference, for the card back-links.
+    const byCompany: Record<string, CalendarEvent[]> = {};
+    (eRes?.items ?? []).forEach((e: CalendarEvent) => {
+      if (e.companyId) (byCompany[e.companyId] ??= []).push(e);
+    });
+    setEventsByCompany(byCompany);
   }, [current]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Deep-link support: /companies?focus=<id> (from an event's company chip, or
+  // the map) brings that card into view and flashes it, once, after load.
+  const didFocus = useRef(false);
+  useEffect(() => {
+    if (didFocus.current || companies.length === 0) return;
+    const focus = new URLSearchParams(window.location.search).get("focus");
+    if (!focus) return;
+    didFocus.current = true;
+    setHighlightId(focus);
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`company-${focus}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    const t = setTimeout(
+      () => setHighlightId((h) => (h === focus ? null : h)),
+      1700
+    );
+    return () => clearTimeout(t);
+  }, [companies.length]);
 
   if (loading) return <div className="muted">Loading…</div>;
   if (!current)
@@ -439,6 +484,7 @@ export default function CompaniesPage() {
         <CompanyColumn
           title="Ideas to visit"
           companies={planned}
+          eventsByCompany={eventsByCompany}
           highlightId={highlightId}
           onEdit={openEdit}
           onDelete={remove}
@@ -447,6 +493,7 @@ export default function CompaniesPage() {
         <CompanyColumn
           title="Visited"
           companies={visited}
+          eventsByCompany={eventsByCompany}
           highlightId={highlightId}
           onEdit={openEdit}
           onDelete={remove}
@@ -460,6 +507,7 @@ export default function CompaniesPage() {
 function CompanyColumn({
   title,
   companies,
+  eventsByCompany,
   highlightId,
   onEdit,
   onDelete,
@@ -467,6 +515,7 @@ function CompanyColumn({
 }: {
   title: string;
   companies: Company[];
+  eventsByCompany: Record<string, CalendarEvent[]>;
   highlightId: string | null;
   onEdit: (c: Company) => void;
   onDelete: (c: Company) => void;
@@ -537,6 +586,24 @@ function CompanyColumn({
                 >
                   {c.notes}
                 </p>
+              )}
+              {(eventsByCompany[c.id]?.length ?? 0) > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <div className="label" style={{ marginBottom: 4 }}>
+                    Events
+                  </div>
+                  <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                    {eventsByCompany[c.id].map((e) => (
+                      <Link
+                        key={e.id}
+                        href={`/calendar?date=${e.date}`}
+                        className="chip chip-research"
+                      >
+                        📅 {e.title} · {shortDate(e.date)}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
               )}
               <div className="row between" style={{ marginTop: 12 }}>
                 <button className="btn btn-ghost" onClick={() => onToggle(c)}>

@@ -67,6 +67,9 @@ export function companiesFile(slug: string) {
 export function researchFile(slug: string) {
   return path.join(projectDir(slug), "research.json");
 }
+export function eventsFile(slug: string) {
+  return path.join(projectDir(slug), "events.json");
+}
 export function evaluationsDir(slug: string) {
   return path.join(projectDir(slug), "evaluations");
 }

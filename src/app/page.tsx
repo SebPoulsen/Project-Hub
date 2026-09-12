@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useHub } from "./providers";
 import { ReflectionEditor } from "@/components/ReflectionEditor";
 import { TodoList } from "@/components/TodoList";
+import { DashboardEvents } from "@/components/DashboardEvents";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -72,6 +73,16 @@ export default function Dashboard() {
               only={["overdue", "today"]}
               showAdd={false}
             />
+          </div>
+
+          <div className="card">
+            <div className="row between" style={{ marginBottom: 10 }}>
+              <div className="label">Events</div>
+              <Link href="/calendar" className="btn btn-ghost">
+                Calendar →
+              </Link>
+            </div>
+            <DashboardEvents project={current.slug} />
           </div>
 
           <div className="card">

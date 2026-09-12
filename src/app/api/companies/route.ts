@@ -6,6 +6,7 @@ import {
   deleteCompany,
   type CompanyInput,
 } from "@/lib/companies";
+import { scrubCompanyRef } from "@/lib/events";
 import { commitAll } from "@/lib/git";
 
 export const runtime = "nodejs";
@@ -61,6 +62,12 @@ export async function DELETE(req: Request) {
   }
   const ok = await deleteCompany(project, id);
   if (!ok) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const hash = await commitAll(project, `company: delete ${id}`);
-  return NextResponse.json({ ok: true, commit: hash });
+  // Clear this company's id from any event that referenced it, so no dangling
+  // ref survives the delete (same intent as scrubbing research refs).
+  const scrubbed = await scrubCompanyRef(project, id);
+  const hash = await commitAll(
+    project,
+    `company: delete ${id}${scrubbed ? ` (-${scrubbed} event ref${scrubbed > 1 ? "s" : ""})` : ""}`
+  );
+  return NextResponse.json({ ok: true, scrubbed, commit: hash });
 }

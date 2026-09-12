@@ -34,6 +34,7 @@ to Claude directly. No database, no export step.
     2026-09-10-welcome-photo.jpg
   research.json            ← { items: [] } research questions (Phase 2)
   companies.json           ← { items: [] } companies/visits (Phase 2)
+  events.json              ← { items: [] } calendar events (Phase 2)
   evaluations/
     individual.json        ← goal + 14 items + named evaluation sets (Phase 2)
     project-level.json     ← single-pass project evaluation (Phase 2)
@@ -238,17 +239,47 @@ Coordinates are set by geocoding the address (OpenStreetMap Nominatim, on an
 explicit "Find on map" click) or by clicking/dragging the pin on the map. The
 map view uses Leaflet + OpenStreetMap tiles.
 
+### `events.json`
+
+Calendar events — a genuine scheduled thing (a meeting, a visit, a talk),
+distinct from to-dos (tasks) and reflections (journal). A flat collection
+(parallel to `todos.json` / `companies.json`), created and edited entirely
+through the Calendar: the day-detail popover's Events section and a calendar-
+level "Add event" button. `startTime`/`endTime` are optional ("HH:MM", 24h);
+an event with no start time is treated as all-day.
+
+```json
+{
+  "items": [
+    { "id": "evt-a1b2c3d4", "title": "Startvækst Aarhus kickoff",
+      "date": "2026-09-20", "startTime": "14:00", "endTime": "16:00",
+      "notes": "", "companyId": "co-a1b2c3d4", "placement": "primary",
+      "createdAt": "…" }
+  ]
+}
+```
+
+`companyId` optionally cross-references a company in `companies.json`. The
+company *name* is never stored on the event — it's resolved live from the id
+(same "derive from source, never hand-store" rule as research findings). The
+reference shows both ways: a 🏢 chip on the event (linking to the company's
+card) and a 📅 back-link on the company's card (linking to the event's day).
+Companies themselves stay date-free — the date lives on the event. When a
+company is deleted, its id is scrubbed from any event that referenced it (the
+same timing/intent as scrubbing research refs from notes/reflections).
+
 ### Placement tags
 
-To-dos, notes, reflections, companies, meeting notes, and research questions
-each carry an optional `placement` field — `"primary"`, `"secondary"`, or
+To-dos, notes, reflections, companies, meeting notes, research questions, and
+calendar events each carry an optional `placement` field — `"primary"`, `"secondary"`, or
 `"both"` — associating the entry with the user's placement *within* the project
 (a within-project distinction, not separate projects; unrelated to the placement
 metadata on `project.json`). Absent/unset is the default; nothing is
-retroactively assigned. It's a JSON property on todo/company/research records and
-a `placement:` frontmatter line on notes/reflections/meetings (written only when
-set). Each list view filters by All / Primary / Secondary / Both (Primary and
-Secondary also match `both`).
+retroactively assigned. It's a JSON property on todo/company/research/event
+records and a `placement:` frontmatter line on notes/reflections/meetings
+(written only when set). Each list view filters by All / Primary / Secondary /
+Both (Primary and Secondary also match `both`); on the Calendar the filter is
+scoped to events (it doesn't affect the reflection/to-do dots).
 
 ### Research findings
 
