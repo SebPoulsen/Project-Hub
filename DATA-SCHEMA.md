@@ -34,7 +34,9 @@ to Claude directly. No database, no export step.
     2026-09-10-welcome-photo.jpg
   research.json            ← { items: [] } research questions (Phase 2)
   companies.json           ← { items: [] } companies/visits (Phase 2)
-  evaluations/             ← (used in Phase 2)
+  evaluations/
+    individual.json        ← goal + 14 items + named evaluation sets (Phase 2)
+    project-level.json     ← single-pass project evaluation (Phase 2)
   .git/                    ← auto-init, one commit per save
 ```
 
@@ -147,6 +149,47 @@ tags: [planning]
 ---
 
 Pasted transcript / notes…
+```
+
+### `evaluations/individual.json`
+
+The individual evaluation track. Setup is a `goal` plus 14 rateable `items`
+(4 Skill, 4 Knowledge, 4 Attitude, 2 Wild card) with **fixed, deterministic
+ids** and user-defined labels — so a set's ratings always key correctly and
+relabelling never orphans past ratings. Each `set` is a freely-named evaluation
+(e.g. Pre, Midway, Post, Supervisor) rating the 14 items 1–10.
+
+```json
+{
+  "goal": "Become an effective placement researcher",
+  "items": [ { "id": "sk1", "category": "skill", "label": "Public speaking" }, … 14 ],
+  "sets": [
+    { "id": "ev-…", "name": "Pre", "ratings": { "sk1": 3, "kn1": 4, … },
+      "reflections": { "gap": "", "steps": "", "edge": "" }, "createdAt": "…" },
+    { "id": "ev-…", "name": "Post", "ratings": { "sk1": 7, "kn1": 6, … },
+      "reflections": { "gap": "", "steps": "", "edge": "" }, "createdAt": "…" }
+  ]
+}
+```
+
+Each set also carries three **optional** reflection fields (`gap`, `steps`,
+`edge`) — the worksheet prompts, filled per set or left blank. The chart draws
+one dashed line per set across the 14 items (grouped by category); there is no
+category-average view.
+
+### `evaluations/project-level.json`
+
+A single-pass project evaluation — five fixed rows, each a 1–10 `rating` + free
+`text`. No timepoints, no chart.
+
+```json
+{
+  "scope":             { "rating": 8, "text": "…" },
+  "researchQuestions": { "rating": null, "text": "" },
+  "collaboration":     { "rating": null, "text": "" },
+  "insights":          { "rating": null, "text": "" },
+  "changes":           { "rating": null, "text": "" }
+}
 ```
 
 ### `research.json`

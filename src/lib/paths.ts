@@ -70,6 +70,12 @@ export function researchFile(slug: string) {
 export function evaluationsDir(slug: string) {
   return path.join(projectDir(slug), "evaluations");
 }
+export function individualEvalFile(slug: string) {
+  return path.join(evaluationsDir(slug), "individual.json");
+}
+export function projectEvalFile(slug: string) {
+  return path.join(evaluationsDir(slug), "project-level.json");
+}
 
 export async function ensureDataDir(): Promise<void> {
   await fs.mkdir(DATA_DIR, { recursive: true });

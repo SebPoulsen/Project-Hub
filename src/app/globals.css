@@ -689,6 +689,53 @@ a.chip-research:hover {
   overflow-wrap: anywhere;
 }
 
+/* Evaluation chart */
+.eval-chart svg {
+  display: block;
+  overflow: visible;
+}
+.eval-axis {
+  fill: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.eval-cat {
+  fill: var(--text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+.eval-item {
+  fill: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+}
+.eval-tip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 5px 10px;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.eval-set-row {
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.eval-set-row:hover {
+  border-color: var(--accent);
+}
+.eval-set-row.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 /* Clickable note cards (open the reading modal) */
 .note-card-click {
   cursor: pointer;
