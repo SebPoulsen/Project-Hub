@@ -196,6 +196,7 @@ async function seedExamples(project: Project): Promise<void> {
         "This is an example entry. Edit or delete it. Tip: hand this whole folder to Claude anytime.",
       tags: ["example", "setup"],
       research: [],
+      placement: null,
     },
     { date, project: slug }
   );

@@ -5,6 +5,14 @@ import Link from "next/link";
 import { useHub } from "../providers";
 import { usePendingDeletes } from "@/components/PendingDeletes";
 import { useScrollLock } from "@/lib/useScrollLock";
+import { PlacementPicker } from "@/components/PlacementPicker";
+import { PlacementFilter } from "@/components/PlacementFilter";
+import {
+  placementMatches,
+  PLACEMENT_LABEL,
+  type PlacementTag,
+  type PlacementFilterValue,
+} from "@/lib/placement-tag";
 import type { ResearchQuestion, Finding } from "@/lib/research";
 
 export default function ResearchPage() {
@@ -19,11 +27,16 @@ export default function ResearchPage() {
   const [adding, setAdding] = useState(false);
   const [newQ, setNewQ] = useState("");
   const [newDetail, setNewDetail] = useState("");
+  const [newPlace, setNewPlace] = useState<PlacementTag | null>(null);
 
   // Inline edit
   const [editId, setEditId] = useState<string | null>(null);
   const [editQ, setEditQ] = useState("");
   const [editDetail, setEditDetail] = useState("");
+  const [editPlace, setEditPlace] = useState<PlacementTag | null>(null);
+
+  // Placement filter for the questions list
+  const [placeFilter, setPlaceFilter] = useState<PlacementFilterValue>("all");
 
   // Delete confirmation (one tier more caution than notes/reflections/todos,
   // since a research delete cascades — it scrubs refs out of tagged entries).
@@ -61,10 +74,11 @@ export default function ResearchPage() {
     await fetch(`/api/research?project=${encodeURIComponent(slug)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, detail: newDetail.trim() }),
+      body: JSON.stringify({ question, detail: newDetail.trim(), placement: newPlace }),
     });
     setNewQ("");
     setNewDetail("");
+    setNewPlace(null);
     setAdding(false);
     load();
   }
@@ -73,6 +87,7 @@ export default function ResearchPage() {
     setEditId(q.id);
     setEditQ(q.question);
     setEditDetail(q.detail);
+    setEditPlace(q.placement ?? null);
   }
 
   async function saveEdit() {
@@ -84,7 +99,11 @@ export default function ResearchPage() {
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, detail: editDetail.trim() }),
+        body: JSON.stringify({
+          question,
+          detail: editDetail.trim(),
+          placement: editPlace,
+        }),
       }
     );
     setEditId(null);
@@ -167,6 +186,7 @@ export default function ResearchPage() {
               onChange={(e) => setNewDetail(e.target.value)}
               style={{ minHeight: 70 }}
             />
+            <PlacementPicker value={newPlace} onChange={setNewPlace} />
             <div className="row">
               <button className="btn btn-accent" onClick={addQuestion}>
                 Add question
@@ -177,6 +197,7 @@ export default function ResearchPage() {
                   setAdding(false);
                   setNewQ("");
                   setNewDetail("");
+                  setNewPlace(null);
                 }}
               >
                 Cancel
@@ -195,29 +216,40 @@ export default function ResearchPage() {
           </p>
         </div>
       ) : (
-        <div className="stack" style={{ gap: 16 }}>
-          {questions.map((q) => (
-            <QuestionCard
-              key={q.id}
-              slug={slug}
-              q={q}
-              findings={findings[q.id] ?? []}
-              collapsed={collapsed.has(q.id)}
-              editing={editId === q.id}
-              editQ={editQ}
-              editDetail={editDetail}
-              setEditQ={setEditQ}
-              setEditDetail={setEditDetail}
-              onToggleCollapse={() => toggleCollapse(q.id)}
-              onStartEdit={() => startEdit(q)}
-              onSaveEdit={saveEdit}
-              onCancelEdit={() => setEditId(null)}
-              onToggleStatus={() => toggleStatus(q)}
-              onDelete={() => setConfirmTarget(q)}
-              onFindingAdded={load}
-            />
-          ))}
-        </div>
+        <>
+          {questions.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <PlacementFilter value={placeFilter} onChange={setPlaceFilter} />
+            </div>
+          )}
+          <div className="stack" style={{ gap: 16 }}>
+            {questions
+              .filter((q) => placementMatches(q.placement, placeFilter))
+              .map((q) => (
+                <QuestionCard
+                  key={q.id}
+                  slug={slug}
+                  q={q}
+                  findings={findings[q.id] ?? []}
+                  collapsed={collapsed.has(q.id)}
+                  editing={editId === q.id}
+                  editQ={editQ}
+                  editDetail={editDetail}
+                  editPlace={editPlace}
+                  setEditQ={setEditQ}
+                  setEditDetail={setEditDetail}
+                  setEditPlace={setEditPlace}
+                  onToggleCollapse={() => toggleCollapse(q.id)}
+                  onStartEdit={() => startEdit(q)}
+                  onSaveEdit={saveEdit}
+                  onCancelEdit={() => setEditId(null)}
+                  onToggleStatus={() => toggleStatus(q)}
+                  onDelete={() => setConfirmTarget(q)}
+                  onFindingAdded={load}
+                />
+              ))}
+          </div>
+        </>
       )}
 
       {confirmTarget && (
@@ -295,6 +327,8 @@ function QuestionCard({
   editDetail,
   setEditQ,
   setEditDetail,
+  editPlace,
+  setEditPlace,
   onToggleCollapse,
   onStartEdit,
   onSaveEdit,
@@ -310,8 +344,10 @@ function QuestionCard({
   editing: boolean;
   editQ: string;
   editDetail: string;
+  editPlace: PlacementTag | null;
   setEditQ: (s: string) => void;
   setEditDetail: (s: string) => void;
+  setEditPlace: (p: PlacementTag | null) => void;
   onToggleCollapse: () => void;
   onStartEdit: () => void;
   onSaveEdit: () => void;
@@ -361,6 +397,7 @@ function QuestionCard({
             onChange={(e) => setEditDetail(e.target.value)}
             style={{ minHeight: 70 }}
           />
+          <PlacementPicker value={editPlace} onChange={setEditPlace} />
           <div className="row">
             <button className="btn btn-accent" onClick={onSaveEdit}>
               Save
@@ -398,6 +435,9 @@ function QuestionCard({
         <span className={`chip ${q.status === "answered" ? "chip-done" : ""}`}>
           {q.status === "answered" ? "Answered" : "Open"}
         </span>
+        {q.placement && (
+          <span className="chip chip-placement">{PLACEMENT_LABEL[q.placement]}</span>
+        )}
         <button className="btn btn-ghost" onClick={onToggleStatus}>
           {q.status === "answered" ? "Reopen" : "Mark answered"}
         </button>

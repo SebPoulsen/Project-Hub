@@ -3,10 +3,12 @@ import {
   readReflection,
   writeReflection,
   listReflectionDates,
+  listReflectionMeta,
   readAllReflections,
   deleteReflection,
   type ReflectionData,
 } from "@/lib/reflections";
+import { normalizePlacementTag } from "@/lib/placement-tag";
 import { commitAll } from "@/lib/git";
 
 export const runtime = "nodejs";
@@ -32,8 +34,13 @@ export async function GET(req: Request) {
     const data = await readReflection(project, isoDate(date));
     return NextResponse.json({ date: isoDate(date), data });
   }
-  // No date -> return the list of dates that have reflections.
-  return NextResponse.json({ dates: await listReflectionDates(project) });
+  // No date -> return the list of dates (for the calendar) plus per-date
+  // placement metadata (for the reflections index filter).
+  const [dates, entries] = await Promise.all([
+    listReflectionDates(project),
+    listReflectionMeta(project),
+  ]);
+  return NextResponse.json({ dates, entries });
 }
 
 export async function PUT(req: Request) {
@@ -51,6 +58,7 @@ export async function PUT(req: Request) {
     notes: String(body?.notes ?? ""),
     tags: Array.isArray(body?.tags) ? body.tags.map(String) : [],
     research: Array.isArray(body?.research) ? body.research.map(String) : [],
+    placement: normalizePlacementTag(body?.placement),
   };
   await writeReflection(project, date, data);
 

@@ -6,6 +6,13 @@ import { useHub } from "../providers";
 import { ReflectionEditor } from "@/components/ReflectionEditor";
 import { usePendingDeletes } from "@/components/PendingDeletes";
 import { copyPlainText } from "@/lib/clipboard";
+import { PlacementFilter } from "@/components/PlacementFilter";
+import {
+  placementMatches,
+  PLACEMENT_LABEL,
+  type PlacementTag,
+  type PlacementFilterValue,
+} from "@/lib/placement-tag";
 import type { ReflectionData } from "@/lib/reflections";
 
 function todayStr() {
@@ -48,6 +55,8 @@ function ReflectionsInner() {
   const { scheduleDelete } = usePendingDeletes();
   const [date, setDate] = useState(todayStr());
   const [dates, setDates] = useState<string[]>([]);
+  const [placeByDate, setPlaceByDate] = useState<Record<string, PlacementTag | null>>({});
+  const [placeFilter, setPlaceFilter] = useState<PlacementFilterValue>("all");
   const [editorKey, setEditorKey] = useState(0);
   const [copiedAll, setCopiedAll] = useState(false);
   // Dates soft-deleted but still within the undo window. The file still exists
@@ -68,7 +77,12 @@ function ReflectionsInner() {
     if (!current) return;
     fetch(`/api/reflections?project=${encodeURIComponent(current.slug)}`)
       .then((r) => r.json())
-      .then((res) => setDates(res?.dates ?? []));
+      .then((res) => {
+        setDates(res?.dates ?? []);
+        const map: Record<string, PlacementTag | null> = {};
+        for (const e of res?.entries ?? []) map[e.date] = e.placement ?? null;
+        setPlaceByDate(map);
+      });
   }, [current]);
 
   // A save means this date has content and should be visible: un-hide it (covers
@@ -129,7 +143,9 @@ function ReflectionsInner() {
       </div>
     );
 
-  const visibleDates = dates.filter((d) => !hiddenDates.has(d));
+  const visibleDates = dates.filter(
+    (d) => !hiddenDates.has(d) && placementMatches(placeByDate[d], placeFilter)
+  );
 
   // Copy every past reflection as plain text, oldest-to-newest, for pasting
   // into a report or handing to Claude at the end of the project period.
@@ -192,6 +208,9 @@ function ReflectionsInner() {
               </button>
             )}
           </div>
+          <div style={{ marginBottom: 12 }}>
+            <PlacementFilter value={placeFilter} onChange={setPlaceFilter} />
+          </div>
           <div className="stack" style={{ gap: 4 }}>
             {visibleDates.length === 0 && (
               <div className="muted" style={{ fontSize: 14 }}>
@@ -206,7 +225,14 @@ function ReflectionsInner() {
                 onClick={() => setDate(d)}
               >
                 <span>{pretty(d)}</span>
-                {d === todayStr() && <span className="chip">today</span>}
+                <span className="row" style={{ gap: 6 }}>
+                  {placeByDate[d] && (
+                    <span className="chip chip-placement">
+                      {PLACEMENT_LABEL[placeByDate[d] as PlacementTag]}
+                    </span>
+                  )}
+                  {d === todayStr() && <span className="chip">today</span>}
+                </span>
               </button>
             ))}
           </div>

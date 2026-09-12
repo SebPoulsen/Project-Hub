@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PlacementPicker } from "@/components/PlacementPicker";
+import type { PlacementTag } from "@/lib/placement-tag";
 import type { Meeting } from "@/lib/meetings";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved";
@@ -15,6 +17,7 @@ interface FormState {
   meeting: string;
   date: string;
   tags: string;
+  placement: PlacementTag | null;
   body: string;
 }
 
@@ -23,6 +26,7 @@ const EMPTY: FormState = {
   meeting: "",
   date: todayStr(),
   tags: "",
+  placement: null,
   body: "",
 };
 
@@ -79,6 +83,7 @@ export function MeetingEditor({
           meeting: m.meeting ?? "",
           date: m.date ?? todayStr(),
           tags: (m.tags ?? []).join(", "),
+          placement: m.placement ?? null,
           body: m.body ?? "",
         });
         setState("idle");
@@ -98,6 +103,7 @@ export function MeetingEditor({
         .split(",")
         .map((t) => t.trim())
         .filter(Boolean),
+      placement: f.placement,
       body: f.body,
     };
   }
@@ -241,6 +247,13 @@ export function MeetingEditor({
         value={form.tags}
         onChange={(e) => update("tags", e.target.value)}
         onBlur={flushOnBlur}
+      />
+      <PlacementPicker
+        value={form.placement}
+        onChange={(p) => {
+          setForm((f) => ({ ...f, placement: p }));
+          scheduleSave();
+        }}
       />
       <div className="row between">
         <span className={`save-state ${state === "saving" ? "saving" : ""}`}>

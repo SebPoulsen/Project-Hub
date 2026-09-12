@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { companiesFile, exists } from "./paths";
 import { cryptoRandomId } from "./projects";
+import { normalizePlacementTag, type PlacementTag } from "./placement-tag";
 
 export type CompanyStatus = "planned" | "visited";
 
@@ -20,6 +21,7 @@ export interface Company {
   lat: number | null;
   lng: number | null;
   visitDate: string | null; // YYYY-MM-DD, for visited companies
+  placement: PlacementTag | null; // optional within-project placement tag
   createdAt: string;
 }
 
@@ -50,6 +52,7 @@ function normalize(raw: Partial<Company> & { id: string }): Company {
     lat: coerceNum(raw.lat),
     lng: coerceNum(raw.lng),
     visitDate: raw.visitDate ? String(raw.visitDate).slice(0, 10) : null,
+    placement: normalizePlacementTag(raw.placement),
     createdAt: raw.createdAt ?? new Date().toISOString(),
   };
 }

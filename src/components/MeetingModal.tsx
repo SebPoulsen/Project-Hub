@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useScrollLock } from "@/lib/useScrollLock";
+import { PLACEMENT_LABEL } from "@/lib/placement-tag";
 import type { Meeting } from "@/lib/meetings";
 
 /**
@@ -78,6 +79,11 @@ export function MeetingModal({
               <span className="label">{meeting.date}</span>
               {meeting.meeting && (
                 <span className="chip chip-research">▤ {meeting.meeting}</span>
+              )}
+              {meeting.placement && (
+                <span className="chip chip-placement">
+                  {PLACEMENT_LABEL[meeting.placement]}
+                </span>
               )}
             </div>
             {meeting.tags?.length > 0 && (

@@ -34,6 +34,7 @@ export async function POST(req: Request) {
   const q = await createQuestion(project, {
     question: String(body?.question ?? ""),
     detail: String(body?.detail ?? ""),
+    placement: body?.placement,
   });
   const hash = await commitAll(project, `research: add "${q.question}"`);
   return NextResponse.json({ ...q, commit: hash }, { status: 201 });
@@ -54,12 +55,14 @@ export async function PUT(req: Request) {
     question?: string;
     detail?: string;
     status?: "open" | "answered";
+    placement?: unknown;
   } = {};
   if (body?.question !== undefined) patch.question = String(body.question);
   if (body?.detail !== undefined) patch.detail = String(body.detail);
   if (body?.status === "open" || body?.status === "answered") {
     patch.status = body.status;
   }
+  if (body?.placement !== undefined) patch.placement = body.placement;
   const q = await updateQuestion(project, id, patch);
   if (!q) return NextResponse.json({ error: "not found" }, { status: 404 });
   const hash = await commitAll(project, `research: edit "${q.question}"`);

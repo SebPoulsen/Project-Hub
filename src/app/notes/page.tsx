@@ -7,7 +7,15 @@ import { Lightbox } from "@/components/Lightbox";
 import { NoteModal } from "@/components/NoteModal";
 import { usePendingDeletes } from "@/components/PendingDeletes";
 import { ResearchPicker } from "@/components/ResearchPicker";
+import { PlacementPicker } from "@/components/PlacementPicker";
+import { PlacementFilter } from "@/components/PlacementFilter";
 import { copyPlainText } from "@/lib/clipboard";
+import {
+  placementMatches,
+  PLACEMENT_LABEL,
+  type PlacementTag,
+  type PlacementFilterValue,
+} from "@/lib/placement-tag";
 import type { Note, NoteMeta } from "@/lib/notes";
 
 type FormMode =
@@ -39,6 +47,8 @@ function NotesInner() {
   const [body, setBody] = useState("");
   const [tags, setTags] = useState("");
   const [research, setResearch] = useState<string[]>([]); // tagged research-question ids
+  const [place, setPlace] = useState<PlacementTag | null>(null);
+  const [placeFilter, setPlaceFilter] = useState<PlacementFilterValue>("all");
   const [keep, setKeep] = useState<string[]>([]); // existing attachments to retain (edit)
   const [busy, setBusy] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
@@ -77,6 +87,7 @@ function NotesInner() {
     setBody("");
     setTags("");
     setResearch([]);
+    setPlace(null);
     setKeep([]);
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -95,6 +106,7 @@ function NotesInner() {
     setBody(stripImageMarkdown(full.body));
     setTags((full.tags ?? []).join(", "));
     setResearch(full.research ?? []);
+    setPlace(full.placement ?? null);
     setKeep(full.attachments ?? []);
     if (fileRef.current) fileRef.current.value = "";
     setMode({ kind: "edit", id });
@@ -117,6 +129,7 @@ function NotesInner() {
     fd.append("body", body);
     fd.append("tags", tags);
     fd.append("research", research.join(","));
+    fd.append("placement", place ?? "");
     const files = fileRef.current?.files;
     if (files) for (const f of Array.from(files)) fd.append("files", f);
 
@@ -250,6 +263,8 @@ function NotesInner() {
               onChange={setResearch}
             />
 
+            <PlacementPicker value={place} onChange={setPlace} />
+
             {/* Existing attachments (edit mode) — click × to drop one */}
             {keep.length > 0 && (
               <div>
@@ -308,19 +323,27 @@ function NotesInner() {
         </div>
       )}
 
+      {notes.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <PlacementFilter value={placeFilter} onChange={setPlaceFilter} />
+        </div>
+      )}
+
       <div className="grid grid-2">
         {notes.length === 0 && <div className="muted">No notes yet.</div>}
-        {notes.map((n) => (
-          <NoteCard
-            key={n.id}
-            project={current.slug}
-            meta={n}
-            researchTitles={researchTitles}
-            onOpen={() => setViewingId(n.id)}
-            onEdit={() => openEdit(n.id)}
-            onDelete={() => remove(n.id)}
-          />
-        ))}
+        {notes
+          .filter((n) => placementMatches(n.placement, placeFilter))
+          .map((n) => (
+            <NoteCard
+              key={n.id}
+              project={current.slug}
+              meta={n}
+              researchTitles={researchTitles}
+              onOpen={() => setViewingId(n.id)}
+              onEdit={() => openEdit(n.id)}
+              onDelete={() => remove(n.id)}
+            />
+          ))}
       </div>
 
       {viewingId && (
@@ -379,8 +402,13 @@ function NoteCard({
         <h3 style={{ margin: 0, fontSize: 18 }}>{meta.title}</h3>
         <span className="label">{meta.date}</span>
       </div>
-      {(meta.tags?.length > 0 || linkedQuestions.length > 0) && (
+      {(meta.tags?.length > 0 || linkedQuestions.length > 0 || meta.placement) && (
         <div style={{ marginTop: 8 }}>
+          {meta.placement && (
+            <span className="chip chip-placement">
+              {PLACEMENT_LABEL[meta.placement]}
+            </span>
+          )}
           {meta.tags.map((t) => (
             <span key={t} className="chip">
               {t}

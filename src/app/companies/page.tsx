@@ -4,6 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useHub } from "../providers";
 import { usePendingDeletes } from "@/components/PendingDeletes";
+import { PlacementPicker } from "@/components/PlacementPicker";
+import { PlacementFilter } from "@/components/PlacementFilter";
+import {
+  placementMatches,
+  PLACEMENT_LABEL,
+  type PlacementTag,
+  type PlacementFilterValue,
+} from "@/lib/placement-tag";
 import type { Company, CompanyStatus } from "@/lib/companies";
 
 // Leaflet touches window at import — load the map client-only.
@@ -32,6 +40,7 @@ interface FormState {
   visitDate: string;
   lat: number | null;
   lng: number | null;
+  placement: PlacementTag | null;
 }
 
 const EMPTY_FORM: FormState = {
@@ -43,6 +52,7 @@ const EMPTY_FORM: FormState = {
   visitDate: "",
   lat: null,
   lng: null,
+  placement: null,
 };
 
 export default function CompaniesPage() {
@@ -52,6 +62,7 @@ export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [placeFilter, setPlaceFilter] = useState<PlacementFilterValue>("all");
   const [mode, setMode] = useState<FormMode>({ kind: "closed" });
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
@@ -81,7 +92,9 @@ export default function CompaniesPage() {
     );
 
   const slug = current.slug;
-  const visible = companies.filter((c) => !pendingIds.has(c.id));
+  const visible = companies.filter(
+    (c) => !pendingIds.has(c.id) && placementMatches(c.placement, placeFilter)
+  );
   const planned = visible.filter((c) => c.status === "planned");
   const visited = visible.filter((c) => c.status === "visited");
 
@@ -101,6 +114,7 @@ export default function CompaniesPage() {
       visitDate: c.visitDate ?? "",
       lat: c.lat,
       lng: c.lng,
+      placement: c.placement,
     });
     setGeo("idle");
     setMode({ kind: "edit", id: c.id });
@@ -317,6 +331,10 @@ export default function CompaniesPage() {
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 style={{ minHeight: 80 }}
               />
+              <PlacementPicker
+                value={form.placement}
+                onChange={(p) => setForm((f) => ({ ...f, placement: p }))}
+              />
             </div>
 
             <div className="stack">
@@ -385,18 +403,29 @@ export default function CompaniesPage() {
           onSelect={highlightCompany}
         />
       </div>
-      <div className="row" style={{ gap: 16, marginBottom: 20 }}>
-        <span className="row" style={{ gap: 6 }}>
-          <span className="map-pin planned" style={{ position: "relative" }} />
-          <span className="muted" style={{ fontSize: 13 }}>Idea to visit</span>
-        </span>
-        <span className="row" style={{ gap: 6 }}>
-          <span className="map-pin visited" style={{ position: "relative" }} />
-          <span className="muted" style={{ fontSize: 13 }}>Visited</span>
-        </span>
+      <div className="row between" style={{ gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
+        <div className="row" style={{ gap: 16 }}>
+          <span className="row" style={{ gap: 6 }}>
+            <span className="map-pin planned" style={{ position: "relative" }} />
+            <span className="muted" style={{ fontSize: 13 }}>Idea to visit</span>
+          </span>
+          <span className="row" style={{ gap: 6 }}>
+            <span className="map-pin visited" style={{ position: "relative" }} />
+            <span className="muted" style={{ fontSize: 13 }}>Visited</span>
+          </span>
+        </div>
+        {companies.some((c) => !pendingIds.has(c.id)) && (
+          <PlacementFilter value={placeFilter} onChange={setPlaceFilter} />
+        )}
       </div>
 
-      {visible.length === 0 && (
+      {companies.some((c) => !pendingIds.has(c.id)) ? (
+        visible.length === 0 && (
+          <div className="muted" style={{ fontSize: 14, marginBottom: 12 }}>
+            No companies match this placement filter.
+          </div>
+        )
+      ) : (
         <div className="empty-state">
           <h2>No companies yet</h2>
           <p>Add companies you’ve visited or want to visit, and they’ll pin on the map.</p>
@@ -461,8 +490,15 @@ function CompanyColumn({
             >
               <div className="row between">
                 <h3 style={{ margin: 0, fontSize: 17 }}>{c.name}</h3>
-                <span className={`chip company-status ${c.status}`}>
-                  {c.status === "visited" ? "Visited" : "Planned"}
+                <span className="row" style={{ gap: 6 }}>
+                  {c.placement && (
+                    <span className="chip chip-placement">
+                      {PLACEMENT_LABEL[c.placement]}
+                    </span>
+                  )}
+                  <span className={`chip company-status ${c.status}`}>
+                    {c.status === "visited" ? "Visited" : "Planned"}
+                  </span>
                 </span>
               </div>
               {c.address && (

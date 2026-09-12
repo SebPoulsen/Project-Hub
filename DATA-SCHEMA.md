@@ -238,6 +238,18 @@ Coordinates are set by geocoding the address (OpenStreetMap Nominatim, on an
 explicit "Find on map" click) or by clicking/dragging the pin on the map. The
 map view uses Leaflet + OpenStreetMap tiles.
 
+### Placement tags
+
+To-dos, notes, reflections, companies, meeting notes, and research questions
+each carry an optional `placement` field — `"primary"`, `"secondary"`, or
+`"both"` — associating the entry with the user's placement *within* the project
+(a within-project distinction, not separate projects; unrelated to the placement
+metadata on `project.json`). Absent/unset is the default; nothing is
+retroactively assigned. It's a JSON property on todo/company/research records and
+a `placement:` frontmatter line on notes/reflections/meetings (written only when
+set). Each list view filters by All / Primary / Secondary / Both (Primary and
+Secondary also match `both`).
+
 ### Research findings
 
 **Findings are not stored here.** A question's nested findings are computed live

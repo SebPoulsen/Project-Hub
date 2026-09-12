@@ -4,6 +4,7 @@ import matter from "gray-matter";
 import { meetingsDir, exists } from "./paths";
 import { toDateStr } from "./notes";
 import { cryptoRandomId, today } from "./projects";
+import { normalizePlacementTag, type PlacementTag } from "./placement-tag";
 
 /**
  * Meeting notes: structured logging of meetings that already happened (paste a
@@ -17,6 +18,7 @@ export interface MeetingMeta {
   meeting: string; // meeting name / series (the "tag")
   date: string;
   tags: string[];
+  placement: PlacementTag | null; // optional within-project placement tag
   preview?: string; // short body preview for list cards (set by listMeetings)
 }
 
@@ -48,6 +50,7 @@ export async function listMeetings(slug: string): Promise<MeetingMeta[]> {
       meeting: String(data.meeting ?? ""),
       date: toDateStr(data.date),
       tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
+      placement: normalizePlacementTag(data.placement),
       preview: makePreview(content),
     });
   }
@@ -70,6 +73,7 @@ export async function readMeeting(
     meeting: String(data.meeting ?? ""),
     date: toDateStr(data.date),
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
+    placement: normalizePlacementTag(data.placement),
     body: content.trim(),
   };
 }
@@ -90,6 +94,7 @@ export interface MeetingInput {
   meeting: string;
   date: string;
   tags: string[];
+  placement: PlacementTag | null;
   body: string;
 }
 
@@ -102,6 +107,7 @@ function serialize(input: MeetingInput, slug: string): string {
     `date: ${input.date}`,
     `project: ${slug}`,
     `tags: ${tags}`,
+    ...(input.placement ? [`placement: ${input.placement}`] : []),
     "---",
     "",
     input.body.trim(),
@@ -131,6 +137,7 @@ export async function createMeeting(
     meeting: input.meeting ?? "",
     date,
     tags: input.tags ?? [],
+    placement: normalizePlacementTag(input.placement),
     body: input.body ?? "",
   };
   await fs.writeFile(path.join(meetingsDir(slug), `${id}.md`), serialize(full, slug));
@@ -153,6 +160,10 @@ export async function updateMeeting(
     // the displayed date comes from frontmatter, so editing the date is fine.
     date: nextDate,
     tags: input.tags ?? existing.tags,
+    placement:
+      input.placement !== undefined
+        ? normalizePlacementTag(input.placement)
+        : existing.placement,
     body: input.body ?? existing.body,
   };
   await fs.writeFile(path.join(meetingsDir(slug), `${id}.md`), serialize(full, slug));

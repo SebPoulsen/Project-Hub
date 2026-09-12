@@ -1,10 +1,12 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 import matter from "gray-matter";
 import {
   reflectionsDir,
   reflectionFile,
   exists,
 } from "./paths";
+import { normalizePlacementTag, type PlacementTag } from "./placement-tag";
 
 export interface ReflectionData {
   noticed: string;
@@ -14,6 +16,8 @@ export interface ReflectionData {
   tags: string[];
   /** Research-question ids this reflection is tagged to (see lib/research.ts). */
   research: string[];
+  /** Optional within-project placement tag. */
+  placement: PlacementTag | null;
 }
 
 export interface ReflectionMeta {
@@ -43,6 +47,7 @@ export function serializeReflection(
     `project: ${meta.project}`,
     `tags: ${tags}`,
     `research: ${research}`,
+    ...(data.placement ? [`placement: ${data.placement}`] : []),
     "---",
     "",
   ];
@@ -70,6 +75,7 @@ export function parseReflection(raw: string): ReflectionData {
     notes: "",
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
     research: Array.isArray(data.research) ? data.research.map(String) : [],
+    placement: normalizePlacementTag(data.placement),
   };
 
   const headingToKey = new Map(SECTIONS.map((s) => [s.heading, s.key]));
@@ -133,6 +139,30 @@ export async function readAllReflections(
   for (const date of dates) {
     const data = await readReflection(slug, date);
     if (data) out.push({ date, data });
+  }
+  return out;
+}
+
+/**
+ * List each reflection's date + placement tag (newest first), for the
+ * reflections index filter. Reads only frontmatter of each file.
+ */
+export async function listReflectionMeta(
+  slug: string
+): Promise<{ date: string; placement: PlacementTag | null }[]> {
+  const dir = reflectionsDir(slug);
+  if (!(await exists(dir))) return [];
+  const files = (await fs.readdir(dir))
+    .filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f))
+    .sort()
+    .reverse();
+  const out: { date: string; placement: PlacementTag | null }[] = [];
+  for (const f of files) {
+    const { data } = matter(await fs.readFile(path.join(dir, f), "utf8"));
+    out.push({
+      date: f.replace(/\.md$/, ""),
+      placement: normalizePlacementTag(data.placement),
+    });
   }
   return out;
 }

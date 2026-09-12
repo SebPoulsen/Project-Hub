@@ -680,6 +680,17 @@ a.chip-research:hover {
   background: var(--accent-soft);
 }
 
+/* Placement tag chip (display on list items) */
+.chip-placement {
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
 /* Truncated body preview on note cards */
 .note-preview {
   margin-top: 10px;

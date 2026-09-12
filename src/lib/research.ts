@@ -11,6 +11,7 @@ import {
 import { cryptoRandomId, getProject } from "./projects";
 import { listNotes, readNote } from "./notes";
 import { readAllReflections } from "./reflections";
+import { normalizePlacementTag, type PlacementTag } from "./placement-tag";
 
 /**
  * A research question is its own record so learnings can reference it by id and
@@ -24,6 +25,7 @@ export interface ResearchQuestion {
   question: string;
   detail: string;
   status: "open" | "answered";
+  placement: PlacementTag | null; // optional within-project placement tag
   createdAt: string;
 }
 
@@ -41,7 +43,12 @@ export async function readResearch(slug: string): Promise<ResearchFile> {
   try {
     const parsed = JSON.parse(await fs.readFile(file, "utf8"));
     if (Array.isArray(parsed?.items)) {
-      return { items: parsed.items.filter(Boolean) };
+      return {
+        items: parsed.items.filter(Boolean).map((q: ResearchQuestion) => ({
+          ...q,
+          placement: normalizePlacementTag(q.placement),
+        })),
+      };
     }
     return emptyResearch();
   } catch {
@@ -73,6 +80,7 @@ async function migrateLegacy(slug: string): Promise<ResearchFile> {
           question,
           detail: "",
           status: "open" as const,
+          placement: null,
           createdAt: new Date().toISOString(),
         }))
     : [];
@@ -97,7 +105,7 @@ export function newQuestionId(): string {
 
 export async function createQuestion(
   slug: string,
-  input: { question: string; detail?: string }
+  input: { question: string; detail?: string; placement?: unknown }
 ): Promise<ResearchQuestion> {
   const file = await readResearch(slug);
   const q: ResearchQuestion = {
@@ -105,6 +113,7 @@ export async function createQuestion(
     question: input.question.trim() || "Untitled question",
     detail: (input.detail ?? "").trim(),
     status: "open",
+    placement: normalizePlacementTag(input.placement),
     createdAt: new Date().toISOString(),
   };
   file.items.push(q);
@@ -115,7 +124,9 @@ export async function createQuestion(
 export async function updateQuestion(
   slug: string,
   id: string,
-  patch: Partial<Pick<ResearchQuestion, "question" | "detail" | "status">>
+  patch: Partial<Pick<ResearchQuestion, "question" | "detail" | "status">> & {
+    placement?: unknown;
+  }
 ): Promise<ResearchQuestion | null> {
   const file = await readResearch(slug);
   const q = file.items.find((x) => x.id === id);
@@ -123,6 +134,7 @@ export async function updateQuestion(
   if (patch.question !== undefined) q.question = patch.question.trim() || q.question;
   if (patch.detail !== undefined) q.detail = patch.detail.trim();
   if (patch.status !== undefined) q.status = patch.status;
+  if (patch.placement !== undefined) q.placement = normalizePlacementTag(patch.placement);
   await writeResearch(slug, file);
   return q;
 }

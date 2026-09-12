@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReflectionData } from "@/lib/reflections";
 import { ResearchPicker } from "@/components/ResearchPicker";
+import { PlacementPicker } from "@/components/PlacementPicker";
+import type { PlacementTag } from "@/lib/placement-tag";
 
 const EMPTY: ReflectionData = {
   noticed: "",
@@ -11,6 +13,7 @@ const EMPTY: ReflectionData = {
   notes: "",
   tags: [],
   research: [],
+  placement: null,
 };
 
 const PROMPTS: { key: keyof ReflectionData; label: string; ph: string }[] = [
@@ -206,6 +209,13 @@ export function ReflectionEditor({
         selected={data.research}
         onChange={(ids) => {
           setData((d) => ({ ...d, research: ids }));
+          scheduleSave();
+        }}
+      />
+      <PlacementPicker
+        value={data.placement}
+        onChange={(p: PlacementTag | null) => {
+          setData((d) => ({ ...d, placement: p }));
           scheduleSave();
         }}
       />

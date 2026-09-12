@@ -7,6 +7,7 @@ import {
   exists,
 } from "./paths";
 import { cryptoRandomId, today } from "./projects";
+import { normalizePlacementTag, type PlacementTag } from "./placement-tag";
 
 export interface NoteMeta {
   id: string; // filename without .md
@@ -16,6 +17,8 @@ export interface NoteMeta {
   attachments: string[];
   /** Research-question ids this note is tagged to (see lib/research.ts). */
   research: string[];
+  /** Optional within-project placement tag. */
+  placement: PlacementTag | null;
   /** Short plain-text preview of the body (list cards). Set by listNotes. */
   preview?: string;
 }
@@ -75,6 +78,7 @@ export async function listNotes(slug: string): Promise<NoteMeta[]> {
         ? data.attachments.map(String)
         : [],
       research: Array.isArray(data.research) ? data.research.map(String) : [],
+      placement: normalizePlacementTag(data.placement),
       preview: makePreview(content),
     });
   }
@@ -107,6 +111,7 @@ export async function readNote(slug: string, id: string): Promise<Note | null> {
       ? data.attachments.map(String)
       : [],
     research: Array.isArray(data.research) ? data.research.map(String) : [],
+    placement: normalizePlacementTag(data.placement),
     body: content.trim(),
   };
 }
@@ -122,6 +127,7 @@ export interface CreateNoteInput {
   body: string;
   tags: string[];
   research: string[];
+  placement: PlacementTag | null;
   attachments: { filename: string; bytes: Buffer }[];
 }
 
@@ -172,6 +178,7 @@ export async function createNote(
     `project: ${slug}`,
     `tags: ${tags}`,
     `research: ${research}`,
+    ...(input.placement ? [`placement: ${input.placement}`] : []),
     `attachments: ${attachYaml}`,
     "---",
     "",
@@ -188,6 +195,7 @@ export async function createNote(
     tags: input.tags,
     attachments: savedNames,
     research: input.research,
+    placement: input.placement,
     body: input.body.trim(),
   };
 }
@@ -197,6 +205,7 @@ export interface UpdateNoteInput {
   body: string; // clean body text WITHOUT the trailing image markdown block
   tags: string[];
   research: string[];
+  placement: PlacementTag | null;
   keepAttachments: string[]; // existing attachment filenames to retain
   newAttachments: { filename: string; bytes: Buffer }[];
 }
@@ -246,6 +255,7 @@ export async function updateNote(
     `project: ${slug}`,
     `tags: ${tags}`,
     `research: ${research}`,
+    ...(input.placement ? [`placement: ${input.placement}`] : []),
     `attachments: ${attachYaml}`,
     "---",
     "",
@@ -268,6 +278,7 @@ export async function updateNote(
     tags: input.tags,
     attachments: finalAttachments,
     research: input.research,
+    placement: input.placement,
     body: input.body.trim(),
   };
 }

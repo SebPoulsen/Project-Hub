@@ -1,12 +1,15 @@
 import fs from "node:fs/promises";
 import { todosFile, exists } from "./paths";
 
+import type { PlacementTag } from "./placement-tag";
+
 export interface Todo {
   id: string;
   text: string;
   done: boolean;
   due: string | null; // YYYY-MM-DD or null
   createdAt: string;
+  placement?: PlacementTag; // optional within-project placement tag
 }
 
 /**

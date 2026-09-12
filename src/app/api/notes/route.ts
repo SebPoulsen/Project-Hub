@@ -7,6 +7,7 @@ import {
   updateNote,
   deleteNote,
 } from "@/lib/notes";
+import { normalizePlacementTag } from "@/lib/placement-tag";
 import { commitAll } from "@/lib/git";
 
 export const runtime = "nodejs";
@@ -64,6 +65,7 @@ export async function POST(req: Request) {
     body: bodyText,
     tags,
     research,
+    placement: normalizePlacementTag(form.get("placement")),
     attachments,
   });
   const hash = await commitAll(
@@ -115,6 +117,7 @@ export async function PUT(req: Request) {
     body: bodyText,
     tags,
     research,
+    placement: normalizePlacementTag(form.get("placement")),
     keepAttachments,
     newAttachments,
   });

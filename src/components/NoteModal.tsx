@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useScrollLock } from "@/lib/useScrollLock";
+import { PLACEMENT_LABEL } from "@/lib/placement-tag";
 import type { Note } from "@/lib/notes";
 
 function attachmentUrl(project: string, file: string) {
@@ -103,8 +104,14 @@ export function NoteModal({
           <>
             <div className="label">{note.date}</div>
             {(note.tags?.length > 0 ||
+              note.placement ||
               (note.research ?? []).some((r) => researchTitles[r])) && (
               <div style={{ marginTop: 8 }}>
+                {note.placement && (
+                  <span className="chip chip-placement">
+                    {PLACEMENT_LABEL[note.placement]}
+                  </span>
+                )}
                 {note.tags.map((t) => (
                   <span key={t} className="chip">
                     {t}

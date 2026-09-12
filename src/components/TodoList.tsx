@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePendingDeletes } from "@/components/PendingDeletes";
+import { PlacementPicker } from "@/components/PlacementPicker";
+import { PlacementFilter } from "@/components/PlacementFilter";
+import {
+  placementMatches,
+  PLACEMENT_LABEL,
+  type PlacementTag,
+  type PlacementFilterValue,
+} from "@/lib/placement-tag";
 import {
   bucketize,
   dueLabel,
@@ -50,6 +58,8 @@ export function TodoList({
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [dueDraft, setDueDraft] = useState(() => ymd(new Date()));
+  const [placeDraft, setPlaceDraft] = useState<PlacementTag | null>(null);
+  const [placeFilter, setPlaceFilter] = useState<PlacementFilterValue>("all");
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [now] = useState(() => new Date());
 
@@ -57,6 +67,7 @@ export function TodoList({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [editDue, setEditDue] = useState("");
+  const [editPlace, setEditPlace] = useState<PlacementTag | null>(null);
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   // Draft for the quick-reschedule picker so typing a date doesn't commit (and
   // close) on every keystroke — we commit only on Enter / blur / calendar pick.
@@ -123,10 +134,12 @@ export function TodoList({
       done: false,
       due: dueDraft || null,
       createdAt: new Date().toISOString(),
+      ...(placeDraft ? { placement: placeDraft } : {}),
     };
     mutate((cur) => [...cur, todo]);
     setText("");
     setDueDraft(ymd(new Date()));
+    setPlaceDraft(null);
   };
 
   const toggle = (id: string) =>
@@ -139,11 +152,16 @@ export function TodoList({
     setEditingId(t.id);
     setEditText(t.text);
     setEditDue(t.due ?? "");
+    setEditPlace(t.placement ?? null);
   };
   const cancelEdit = () => setEditingId(null);
   const saveEdit = (id: string) => {
     const t = editText.trim();
-    updateTodo(id, { text: t || "Untitled task", due: editDue || null });
+    updateTodo(id, {
+      text: t || "Untitled task",
+      due: editDue || null,
+      placement: editPlace ?? undefined,
+    });
     setEditingId(null);
   };
 
@@ -194,14 +212,20 @@ export function TodoList({
 
   if (loading) return <div className="muted">Loading…</div>;
 
-  const visible = items.filter((t) => !pendingIds.has(t.id));
+  const visible = items.filter(
+    (t) => !pendingIds.has(t.id) && placementMatches(t.placement, placeFilter)
+  );
   const buckets = bucketize(visible, now);
 
   const renderItem = (t: Todo) => {
     // Inline edit form (text + due), replaces the row.
     if (editingId === t.id) {
       return (
-        <div key={t.id} className="titem titem-editing">
+        <div
+          key={t.id}
+          className="titem titem-editing"
+          style={{ flexWrap: "wrap", rowGap: 8 }}
+        >
           <input
             type="text"
             className="tedit-text"
@@ -226,6 +250,9 @@ export function TodoList({
           <button className="btn btn-ghost" onClick={cancelEdit}>
             Cancel
           </button>
+          <div style={{ flexBasis: "100%" }}>
+            <PlacementPicker value={editPlace} onChange={setEditPlace} />
+          </div>
         </div>
       );
     }
@@ -245,6 +272,9 @@ export function TodoList({
           {t.done ? "✓" : ""}
         </button>
         <span className="titem-text">{t.text}</span>
+        {t.placement && (
+          <span className="chip chip-placement">{PLACEMENT_LABEL[t.placement]}</span>
+        )}
         {label && <span className={`due-chip due-${label.tone}`}>{label.text}</span>}
 
         {reschedulingId === t.id ? (
@@ -330,31 +360,41 @@ export function TodoList({
   return (
     <div className="todo-app">
       {showAdd && (
-        <form
-          className="todo-add"
-          onSubmit={(e) => {
-            e.preventDefault();
-            add();
-          }}
-        >
-          <input
-            type="text"
-            className="todo-add-text"
-            placeholder="Add a task…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <input
-            type="date"
-            className="todo-add-date"
-            title="Due date (clear for “Later”)"
-            value={dueDraft}
-            onChange={(e) => setDueDraft(e.target.value)}
-          />
-          <button type="submit" className="btn btn-accent">
-            Add
-          </button>
-        </form>
+        <div style={{ marginBottom: 16 }}>
+          <form
+            className="todo-add"
+            style={{ marginBottom: 8 }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              add();
+            }}
+          >
+            <input
+              type="text"
+              className="todo-add-text"
+              placeholder="Add a task…"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            <input
+              type="date"
+              className="todo-add-date"
+              title="Due date (clear for “Later”)"
+              value={dueDraft}
+              onChange={(e) => setDueDraft(e.target.value)}
+            />
+            <button type="submit" className="btn btn-accent">
+              Add
+            </button>
+          </form>
+          <PlacementPicker value={placeDraft} onChange={setPlaceDraft} />
+        </div>
+      )}
+
+      {showAdd && items.some((t) => !pendingIds.has(t.id)) && (
+        <div style={{ marginBottom: 14 }}>
+          <PlacementFilter value={placeFilter} onChange={setPlaceFilter} />
+        </div>
       )}
 
       {renderSection("overdue")}

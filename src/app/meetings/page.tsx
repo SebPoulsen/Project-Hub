@@ -5,7 +5,13 @@ import { useHub } from "../providers";
 import { usePendingDeletes } from "@/components/PendingDeletes";
 import { MeetingModal } from "@/components/MeetingModal";
 import { MeetingEditor } from "@/components/MeetingEditor";
+import { PlacementFilter } from "@/components/PlacementFilter";
 import { copyPlainText } from "@/lib/clipboard";
+import {
+  placementMatches,
+  PLACEMENT_LABEL,
+  type PlacementFilterValue,
+} from "@/lib/placement-tag";
 import type { Meeting, MeetingMeta } from "@/lib/meetings";
 
 type FormMode =
@@ -21,6 +27,7 @@ export default function MeetingsPage() {
   const [mode, setMode] = useState<FormMode>({ kind: "closed" });
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>(""); // meeting-name filter
+  const [placeFilter, setPlaceFilter] = useState<PlacementFilterValue>("all");
   const [copiedAll, setCopiedAll] = useState(false);
 
   const load = useCallback(async () => {
@@ -48,7 +55,10 @@ export default function MeetingsPage() {
   const meetingNames = Array.from(
     new Set(meetings.map((m) => m.meeting).filter(Boolean))
   ).sort();
-  const visible = filter ? meetings.filter((m) => m.meeting === filter) : meetings;
+  const visible = meetings.filter(
+    (m) =>
+      (!filter || m.meeting === filter) && placementMatches(m.placement, placeFilter)
+  );
 
   function openCreate() {
     setMode({ kind: "create" });
@@ -153,23 +163,29 @@ export default function MeetingsPage() {
         </div>
       ) : (
         <>
-          {meetingNames.length > 0 && (
-            <div className="row" style={{ gap: 8, marginBottom: 16 }}>
-              <span className="label">Filter</span>
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                style={{ width: "auto" }}
-              >
-                <option value="">All meetings ({meetings.length})</option>
-                {meetingNames.map((n) => (
-                  <option key={n} value={n}>
-                    {n} ({meetings.filter((m) => m.meeting === n).length})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div
+            className="row"
+            style={{ gap: 16, marginBottom: 16, flexWrap: "wrap" }}
+          >
+            {meetingNames.length > 0 && (
+              <div className="row" style={{ gap: 8 }}>
+                <span className="label">Filter</span>
+                <select
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  style={{ width: "auto" }}
+                >
+                  <option value="">All meetings ({meetings.length})</option>
+                  {meetingNames.map((n) => (
+                    <option key={n} value={n}>
+                      {n} ({meetings.filter((m) => m.meeting === n).length})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <PlacementFilter value={placeFilter} onChange={setPlaceFilter} />
+          </div>
           <div className="grid grid-2">
             {visible.map((m) => (
               <MeetingCard
@@ -232,11 +248,16 @@ function MeetingCard({
         <h3 style={{ margin: 0, fontSize: 18 }}>{meta.title || "Untitled meeting"}</h3>
         <span className="label">{meta.date}</span>
       </div>
-      {(meta.meeting || meta.tags?.length > 0) && (
+      {(meta.meeting || meta.tags?.length > 0 || meta.placement) && (
         <div style={{ marginTop: 8 }}>
           {meta.meeting && (
             <span className="chip chip-research" title={meta.meeting}>
               ▤ {meta.meeting}
+            </span>
+          )}
+          {meta.placement && (
+            <span className="chip chip-placement">
+              {PLACEMENT_LABEL[meta.placement]}
             </span>
           )}
           {meta.tags.map((t) => (
