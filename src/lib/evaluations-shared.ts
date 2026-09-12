@@ -92,6 +92,7 @@ export function mergeItems(stored: unknown): EvalItem[] {
 }
 
 export function coerceRating(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
   return Math.min(10, Math.max(1, Math.round(n)));
@@ -125,15 +126,18 @@ export function normalizeSet(raw: unknown): EvalSet | null {
 
 /* ---------------------------- Project-level ----------------------------- */
 
-export const PROJECT_ROWS: { key: string; label: string }[] = [
-  { key: "scope", label: "Scope / deliverables met" },
-  { key: "researchQuestions", label: "Research question(s) answered" },
+// `label` is the full prompt (modal + legend); `short` is the compact x-axis
+// label on the chart.
+export const PROJECT_ROWS: { key: string; label: string; short: string }[] = [
+  { key: "scope", label: "Scope / deliverables met", short: "Scope" },
+  { key: "researchQuestions", label: "Research question(s) answered", short: "Research Qs" },
   {
     key: "collaboration",
     label: "Effectiveness of the company relationship / collaboration",
+    short: "Collaboration",
   },
-  { key: "insights", label: "Insights uncovered from research" },
-  { key: "changes", label: "What I’d change if I ran it again" },
+  { key: "insights", label: "Insights uncovered from research", short: "Insights" },
+  { key: "changes", label: "What I’d change if I ran it again", short: "Changes" },
 ];
 
 export interface ProjectEvalRow {
@@ -141,10 +145,48 @@ export interface ProjectEvalRow {
   text: string;
 }
 
-export type ProjectEval = Record<string, ProjectEvalRow>;
+export type ProjectRows = Record<string, ProjectEvalRow>;
 
-export function emptyProjectEval(): ProjectEval {
-  const out: ProjectEval = {};
+/**
+ * Project-level now mirrors the individual track: freely-named evaluation sets,
+ * each capturing all 5 fixed rows. No per-project setup (rows are fixed).
+ */
+export interface ProjectEvalSet {
+  id: string;
+  name: string;
+  rows: ProjectRows;
+  createdAt: string;
+}
+
+export interface ProjectEvalFile {
+  sets: ProjectEvalSet[];
+}
+
+export function emptyProjectRows(): ProjectRows {
+  const out: ProjectRows = {};
   for (const r of PROJECT_ROWS) out[r.key] = { rating: null, text: "" };
   return out;
+}
+
+export function normalizeProjectRows(raw: unknown): ProjectRows {
+  const base = emptyProjectRows();
+  const r = (raw ?? {}) as Record<string, unknown>;
+  for (const row of PROJECT_ROWS) {
+    const v = r[row.key];
+    if (v && typeof v === "object") {
+      const rv = v as Record<string, unknown>;
+      base[row.key] = { rating: coerceRating(rv.rating), text: String(rv.text ?? "") };
+    }
+  }
+  return base;
+}
+
+export function normalizeProjectSet(raw: unknown): ProjectEvalSet {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: String(r.id ?? `pe-${Math.random().toString(36).slice(2, 10)}`),
+    name: String(r.name ?? "").trim() || "Untitled",
+    rows: normalizeProjectRows(r.rows),
+    createdAt: String(r.createdAt ?? new Date().toISOString()),
+  };
 }

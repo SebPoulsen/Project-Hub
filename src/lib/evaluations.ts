@@ -5,12 +5,14 @@ import {
   emptyIndividual,
   mergeItems,
   normalizeSet,
-  coerceRating,
-  emptyProjectEval,
   PROJECT_ROWS,
+  normalizeProjectRows,
+  normalizeProjectSet,
   type IndividualEval,
   type EvalSet,
-  type ProjectEval,
+  type ProjectEvalFile,
+  type ProjectEvalSet,
+  type ProjectRows,
 } from "./evaluations-shared";
 
 // Re-export the pure API so server callers can import everything from here.
@@ -123,42 +125,98 @@ export async function deleteEvalSet(slug: string, setId: string): Promise<boolea
 
 /* ---------------------------- Project-level ----------------------------- */
 
-export async function readProjectEval(slug: string): Promise<ProjectEval> {
+export async function readProjectEvals(slug: string): Promise<ProjectEvalFile> {
   const file = projectEvalFile(slug);
-  const base = emptyProjectEval();
-  if (!(await exists(file))) return base;
+  if (!(await exists(file))) return { sets: [] };
   try {
     const raw = JSON.parse(await fs.readFile(file, "utf8"));
-    for (const r of PROJECT_ROWS) {
-      const row = raw?.[r.key];
-      if (row && typeof row === "object") {
-        base[r.key] = {
-          rating: coerceRating(row.rating),
-          text: String(row.text ?? ""),
-        };
-      }
+    if (Array.isArray(raw?.sets)) {
+      return { sets: raw.sets.map(normalizeProjectSet) };
     }
-    return base;
+    // Migrate the old single-pass shape ({ scope: {rating,text}, … }) into a
+    // first named set, preserving the values. Deterministic id so it stays
+    // stable across reads until a write persists the new shape.
+    const isLegacy = PROJECT_ROWS.some((r) => raw && typeof raw[r.key] === "object");
+    if (isLegacy) {
+      return {
+        sets: [
+          {
+            id: "initial",
+            name: "Initial",
+            rows: normalizeProjectRows(raw),
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      };
+    }
+    return { sets: [] };
   } catch {
-    return base;
+    return { sets: [] };
   }
 }
 
-export async function saveProjectEval(
-  slug: string,
-  input: ProjectEval
-): Promise<ProjectEval> {
-  const next = emptyProjectEval();
-  for (const r of PROJECT_ROWS) {
-    const row = input?.[r.key];
-    if (row) {
-      next[r.key] = {
-        rating: coerceRating(row.rating),
-        text: String(row.text ?? ""),
-      };
-    }
-  }
+async function writeProjectEvals(slug: string, data: ProjectEvalFile): Promise<void> {
   await fs.mkdir(evaluationsDir(slug), { recursive: true });
-  await fs.writeFile(projectEvalFile(slug), JSON.stringify(next, null, 2));
-  return next;
+  await fs.writeFile(projectEvalFile(slug), JSON.stringify(data, null, 2));
+}
+
+const projectLocks = new Map<string, Promise<unknown>>();
+async function mutateProjectEvals<T>(
+  slug: string,
+  fn: (data: ProjectEvalFile) => T
+): Promise<T> {
+  const prev = projectLocks.get(slug) ?? Promise.resolve();
+  const run = prev.then(async () => {
+    const cur = await readProjectEvals(slug);
+    const result = fn(cur);
+    await writeProjectEvals(slug, cur);
+    return result;
+  });
+  projectLocks.set(slug, run.then(() => undefined, () => undefined));
+  return run;
+}
+
+export async function createProjectSet(
+  slug: string,
+  input: { name: string; rows?: ProjectRows }
+): Promise<ProjectEvalSet> {
+  return mutateProjectEvals(slug, (cur) => {
+    const set = normalizeProjectSet({
+      id: `pe-${cryptoRandomId()}`,
+      name: input.name,
+      rows: input.rows,
+      createdAt: new Date().toISOString(),
+    });
+    cur.sets.push(set);
+    return set;
+  });
+}
+
+export async function updateProjectSet(
+  slug: string,
+  setId: string,
+  input: { name?: string; rows?: ProjectRows }
+): Promise<ProjectEvalSet | null> {
+  return mutateProjectEvals(slug, (cur) => {
+    const existing = cur.sets.find((s) => s.id === setId);
+    if (!existing) return null;
+    const merged = normalizeProjectSet({
+      ...existing,
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.rows !== undefined ? { rows: input.rows } : {}),
+    });
+    merged.id = setId;
+    merged.createdAt = existing.createdAt;
+    cur.sets = cur.sets.map((s) => (s.id === setId ? merged : s));
+    return merged;
+  });
+}
+
+export async function deleteProjectSet(slug: string, setId: string): Promise<boolean> {
+  return mutateProjectEvals(slug, (cur) => {
+    const next = cur.sets.filter((s) => s.id !== setId);
+    if (next.length === cur.sets.length) return false;
+    cur.sets = next;
+    return true;
+  });
 }

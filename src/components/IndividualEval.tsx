@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePendingDeletes } from "@/components/PendingDeletes";
 import { useScrollLock } from "@/lib/useScrollLock";
-import { EvalChart, setColor } from "@/components/EvalChart";
+import { copyPlainText } from "@/lib/clipboard";
+import {
+  RatingLineChart,
+  setColor,
+  type ChartColumn,
+  type ChartSeries,
+} from "@/components/RatingLineChart";
 import {
   CATEGORY_LABEL,
   REFLECTION_PROMPTS,
@@ -37,6 +43,7 @@ export function IndividualEval({ project }: { project: string }) {
   );
   const [highlightSetId, setHighlightSetId] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [copiedAll, setCopiedAll] = useState(false);
 
   const latest = useRef<{ goal: string; items: EvalItem[] }>({ goal: "", items: [] });
   latest.current = { goal: data.goal, items: data.items };
@@ -155,6 +162,40 @@ export function IndividualEval({ project }: { project: string }) {
     });
   }
 
+  async function copyAll() {
+    const list = data.sets.filter((s) => !pendingIds.has(s.id));
+    if (list.length === 0) return;
+    const header = [
+      "Individual evaluation",
+      data.goal.trim() ? `Goal: ${data.goal.trim()}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const formatSet = (s: EvalSet) => {
+      const lines = [`## ${s.name}`];
+      for (const cat of CATEGORIES) {
+        lines.push(CATEGORY_LABEL[cat]);
+        for (const it of data.items.filter((i) => i.category === cat)) {
+          const r = s.ratings[it.id];
+          lines.push(`- ${it.label || "(unlabelled)"}: ${r ?? "—"}`);
+        }
+      }
+      const refl = REFLECTION_PROMPTS.filter((p) => s.reflections[p.key]?.trim());
+      if (refl.length) {
+        lines.push("", "Reflection");
+        for (const p of refl) lines.push(`${p.label} ${s.reflections[p.key].trim()}`);
+      }
+      return lines.join("\n");
+    };
+    const text = `${header}\n\n${list
+      .map(formatSet)
+      .join("\n\n────────────────────────\n\n")}`;
+    if (await copyPlainText(text)) {
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 1800);
+    }
+  }
+
   if (loading) return <div className="muted">Loading…</div>;
 
   const label =
@@ -244,14 +285,21 @@ export function IndividualEval({ project }: { project: string }) {
           <h2 style={{ margin: 0, fontSize: 20 }} className="serif">
             Evaluations
           </h2>
-          <button
-            className="btn btn-accent"
-            onClick={() => setModal({ kind: "add" })}
-            disabled={!setupComplete}
-            title={setupComplete ? "" : "Label all 14 items first"}
-          >
-            + Add evaluation
-          </button>
+          <div className="row" style={{ gap: 6 }}>
+            {visibleSets.length > 0 && (
+              <button className="btn btn-ghost" onClick={copyAll}>
+                {copiedAll ? "Copied ✓" : "Copy all"}
+              </button>
+            )}
+            <button
+              className="btn btn-accent"
+              onClick={() => setModal({ kind: "add" })}
+              disabled={!setupComplete}
+              title={setupComplete ? "" : "Label all 14 items first"}
+            >
+              + Add evaluation
+            </button>
+          </div>
         </div>
 
         {!setupComplete && (
@@ -266,10 +314,23 @@ export function IndividualEval({ project }: { project: string }) {
           <>
             {/* Chart: one dashed line per set across the 14 grouped items. */}
             <div className="card" style={{ marginBottom: 14 }}>
-              <EvalChart
-                items={data.items}
-                sets={visibleSets}
-                highlightSetId={highlightSetId}
+              <RatingLineChart
+                columns={data.items.map(
+                  (i): ChartColumn => ({
+                    key: i.id,
+                    label: i.label || "Item",
+                    group: CATEGORY_LABEL[i.category],
+                  })
+                )}
+                series={visibleSets.map(
+                  (s, idx): ChartSeries => ({
+                    id: s.id,
+                    name: s.name,
+                    color: setColor(idx),
+                    values: s.ratings,
+                  })
+                )}
+                highlightId={highlightSetId}
               />
               <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
                 Each line is an evaluation across all 14 items. Select one below to
@@ -442,6 +503,7 @@ function EvalSetModal({
                         {i.label || <span className="muted">(unlabelled)</span>}
                       </span>
                       <select
+                        className="rating-select"
                         value={ratings[i.id] ?? ""}
                         onChange={(e) =>
                           e.target.value
@@ -452,7 +514,7 @@ function EvalSetModal({
                                 return n;
                               })
                         }
-                        style={{ width: "auto", flex: "0 0 auto" }}
+                        style={{ width: 80, flex: "0 0 auto" }}
                       >
                         <option value="">—</option>
                         {Array.from({ length: 10 }, (_, k) => k + 1).map((n) => (
@@ -468,7 +530,7 @@ function EvalSetModal({
           ))}
         </div>
 
-        <div className="stack" style={{ gap: 12, marginTop: 18 }}>
+        <div className="stack" style={{ gap: 18, marginTop: 20 }}>
           <div className="label">Reflection (optional)</div>
           {REFLECTION_PROMPTS.map((p) => (
             <label className="stack" style={{ gap: 4 }} key={p.key}>

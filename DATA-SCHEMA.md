@@ -179,18 +179,27 @@ category-average view.
 
 ### `evaluations/project-level.json`
 
-A single-pass project evaluation — five fixed rows, each a 1–10 `rating` + free
-`text`. No timepoints, no chart.
+Mirrors the individual track: freely-named evaluation `sets`, each capturing the
+five fixed rows (a 1–10 `rating` + free `text` per row). No per-project setup —
+the rows are fixed. Lets you compare your own Pre/Post against an external
+rater's (e.g. a supervisor's) on one chart.
 
 ```json
 {
-  "scope":             { "rating": 8, "text": "…" },
-  "researchQuestions": { "rating": null, "text": "" },
-  "collaboration":     { "rating": null, "text": "" },
-  "insights":          { "rating": null, "text": "" },
-  "changes":           { "rating": null, "text": "" }
+  "sets": [
+    { "id": "pe-…", "name": "Post", "rows": {
+        "scope":             { "rating": 8, "text": "…" },
+        "researchQuestions": { "rating": 7, "text": "" },
+        "collaboration":     { "rating": 8, "text": "" },
+        "insights":          { "rating": 7, "text": "" },
+        "changes":           { "rating": 6, "text": "" }
+      }, "createdAt": "…" }
+  ]
 }
 ```
+
+The earlier single-pass shape (a bare `{ scope: {…}, … }` object) is migrated on
+read into a first set named `Initial`, preserving its values.
 
 ### `research.json`
 

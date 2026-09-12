@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useHub } from "../providers";
 import { IndividualEval } from "@/components/IndividualEval";
-import { ProjectEvalForm } from "@/components/ProjectEvalForm";
+import { ProjectEval } from "@/components/ProjectEval";
 
 type Track = "individual" | "project";
 
@@ -45,7 +45,7 @@ export default function EvaluationsPage() {
       {track === "individual" ? (
         <IndividualEval project={current.slug} />
       ) : (
-        <ProjectEvalForm project={current.slug} />
+        <ProjectEval project={current.slug} />
       )}
     </div>
   );
