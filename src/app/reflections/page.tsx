@@ -14,6 +14,7 @@ import {
   type PlacementFilterValue,
 } from "@/lib/placement-tag";
 import type { ReflectionData } from "@/lib/reflections";
+import { buildResearchLabels, formatTagLine } from "@/lib/tag-summary";
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -31,9 +32,16 @@ function pretty(d: string) {
 }
 
 // Plain-text rendering of one reflection — matches the single-entry Copy button.
-function formatReflection(date: string, d: ReflectionData): string {
+// `tagLine` (research question / sub-question + placement) is included right
+// under the header when the reflection carries any such tag.
+function formatReflection(
+  date: string,
+  d: ReflectionData,
+  tagLine?: string | null
+): string {
   return [
     `Reflection — ${date}`,
+    ...(tagLine ? [tagLine] : []),
     "",
     "What did you notice today?",
     d.noticed.trim() || "—",
@@ -151,13 +159,29 @@ function ReflectionsInner() {
   // into a report or handing to Claude at the end of the project period.
   const copyAll = async () => {
     if (!current) return;
-    const res = await fetch(
-      `/api/reflections?project=${encodeURIComponent(current.slug)}&all=1`
-    ).then((r) => r.json());
+    const [res, research] = await Promise.all([
+      fetch(
+        `/api/reflections?project=${encodeURIComponent(current.slug)}&all=1`
+      ).then((r) => r.json()),
+      fetch(`/api/research?project=${encodeURIComponent(current.slug)}`).then(
+        (r) => r.json()
+      ),
+    ]);
     const entries: { date: string; data: ReflectionData }[] = res?.entries ?? [];
     if (entries.length === 0) return;
+    const labels = buildResearchLabels(research?.items ?? []);
     const text = entries
-      .map((e) => formatReflection(e.date, e.data))
+      .map((e) =>
+        formatReflection(
+          e.date,
+          e.data,
+          formatTagLine({
+            research: e.data.research,
+            placement: e.data.placement,
+            labels,
+          })
+        )
+      )
       .join("\n\n────────────────────────\n\n");
     if (await copyPlainText(text)) {
       setCopiedAll(true);

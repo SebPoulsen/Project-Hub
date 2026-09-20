@@ -7,6 +7,7 @@ import { MeetingModal } from "@/components/MeetingModal";
 import { MeetingEditor } from "@/components/MeetingEditor";
 import { PlacementFilter } from "@/components/PlacementFilter";
 import { copyPlainText } from "@/lib/clipboard";
+import { formatTagLine } from "@/lib/tag-summary";
 import {
   placementMatches,
   PLACEMENT_LABEL,
@@ -96,17 +97,18 @@ export default function MeetingsPage() {
     const all: Meeting[] = res?.meetings ?? [];
     if (all.length === 0) return;
     const text = all
-      .map((m) =>
-        [
+      .map((m) => {
+        // Meetings carry a placement tag but no research tag.
+        const tagLine = formatTagLine({ placement: m.placement });
+        return [
           `Meeting — ${m.title || "Untitled"} (${m.date})`,
-          m.meeting ? `Meeting: ${m.meeting}` : "",
-          m.tags?.length ? `Tags: ${m.tags.join(", ")}` : "",
+          ...(m.meeting ? [`Meeting: ${m.meeting}`] : []),
+          ...(tagLine ? [tagLine] : []),
+          ...(m.tags?.length ? [`Tags: ${m.tags.join(", ")}`] : []),
           "",
           m.body || "—",
-        ]
-          .filter((l, i) => !((i === 1 || i === 2) && l === ""))
-          .join("\n")
-      )
+        ].join("\n");
+      })
       .join("\n\n────────────────────────\n\n");
     if (await copyPlainText(text)) {
       setCopiedAll(true);

@@ -11,6 +11,7 @@ import { ResearchChip } from "@/components/ResearchChip";
 import { PlacementPicker } from "@/components/PlacementPicker";
 import { PlacementFilter } from "@/components/PlacementFilter";
 import { copyPlainText } from "@/lib/clipboard";
+import { buildResearchLabels, formatTagLine } from "@/lib/tag-summary";
 import {
   placementMatches,
   PLACEMENT_LABEL,
@@ -189,22 +190,32 @@ function NotesInner() {
   // or handing to Claude. Mirrors the Reflections "Copy all".
   async function copyAll() {
     if (!current) return;
-    const res = await fetch(
-      `/api/notes?project=${encodeURIComponent(current.slug)}&all=1`
-    ).then((r) => r.json());
+    const [res, research] = await Promise.all([
+      fetch(`/api/notes?project=${encodeURIComponent(current.slug)}&all=1`).then(
+        (r) => r.json()
+      ),
+      fetch(`/api/research?project=${encodeURIComponent(current.slug)}`).then(
+        (r) => r.json()
+      ),
+    ]);
     const all: Note[] = res?.notes ?? [];
     if (all.length === 0) return;
+    const labels = buildResearchLabels(research?.items ?? []);
     const text = all
-      .map((n) =>
-        [
+      .map((n) => {
+        const tagLine = formatTagLine({
+          research: n.research,
+          placement: n.placement,
+          labels,
+        });
+        return [
           `Note — ${n.title || "Untitled"} (${n.date})`,
-          n.tags?.length ? `Tags: ${n.tags.join(", ")}` : "",
+          ...(tagLine ? [tagLine] : []),
+          ...(n.tags?.length ? [`Tags: ${n.tags.join(", ")}`] : []),
           "",
           stripImageMarkdown(n.body) || "—",
-        ]
-          .filter((l, i) => !(i === 1 && l === ""))
-          .join("\n")
-      )
+        ].join("\n");
+      })
       .join("\n\n────────────────────────\n\n");
     if (await copyPlainText(text)) {
       setCopiedAll(true);
