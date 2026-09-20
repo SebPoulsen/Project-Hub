@@ -7,6 +7,7 @@ import { Lightbox } from "@/components/Lightbox";
 import { NoteModal } from "@/components/NoteModal";
 import { usePendingDeletes } from "@/components/PendingDeletes";
 import { ResearchPicker } from "@/components/ResearchPicker";
+import { ResearchChip } from "@/components/ResearchChip";
 import { PlacementPicker } from "@/components/PlacementPicker";
 import { PlacementFilter } from "@/components/PlacementFilter";
 import { copyPlainText } from "@/lib/clipboard";
@@ -66,8 +67,19 @@ function NotesInner() {
       ),
     ]);
     setNotes(list);
+    // Map every taggable research id -> a display label, covering both
+    // overarching questions and their nested sub-questions (a note's
+    // `research:` ref can point to either). Sub-questions carry their parent
+    // for context and a ↳ marker so a narrowed tag reads distinctly.
     const map: Record<string, string> = {};
-    for (const q of research?.items ?? []) map[q.id] = q.question;
+    for (const q of research?.items ?? []) {
+      map[q.id] = q.question;
+      for (const g of q.groups ?? []) {
+        for (const s of g.subQuestions ?? []) {
+          map[s.id] = `${q.question} ↳ ${s.question}`;
+        }
+      }
+    }
     setResearchTitles(map);
   }
 
@@ -415,9 +427,7 @@ function NoteCard({
             </span>
           ))}
           {linkedQuestions.map((id) => (
-            <span key={id} className="chip chip-research" title={researchTitles[id]}>
-              ◈ {researchTitles[id]}
-            </span>
+            <ResearchChip key={id} label={researchTitles[id]} />
           ))}
         </div>
       )}

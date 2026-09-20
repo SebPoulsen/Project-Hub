@@ -683,6 +683,13 @@ select:focus {
 a.chip-research:hover {
   background: var(--accent-soft);
 }
+/* Tapped-open state on a non-link research chip: let the full label wrap into
+   view instead of being re-clipped by the chip's default nowrap/ellipsis. */
+.chip-research-full {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
 
 /* Placement tag chip (display on list items) */
 .chip-placement {
@@ -1165,4 +1172,208 @@ a.chip-research:hover {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--border);
+}
+
+/* ── Research: nested sub-question groups ─────────────────────────────── */
+
+/* The sub-questions region below an overarching question's direct findings. */
+.rq-subregion {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+/* Shared collapsible sub-header (region title + each group title). */
+.rq-subhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+}
+.rq-subhead .chev {
+  transition: transform 0.15s ease;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--muted);
+}
+.rq-subhead .chev.open {
+  transform: rotate(90deg);
+}
+.rq-subhead-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* One titled group block. */
+.rq-group {
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  min-width: 0;
+}
+.rq-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.rq-group-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Right-aligned cluster of quiet row actions (edit / rename / +finding / …). */
+.rq-rowactions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+/* One sub-question inside a group. A clear header + generous separation so the
+   boundary to the next sub-question reads at a glance, not as a hairline. */
+.rq-sub {
+  padding: 16px 0 4px;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+.rq-sub:first-child {
+  border-top: none;
+  padding-top: 4px;
+}
+.rq-sub-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.rq-sub-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* The moved counter: a quiet meta label leading the nested findings. */
+.rq-sub-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+/* Nested findings read as clearly secondary: indented, tinted, left-ruled. */
+.rq-sub-findings {
+  margin: 8px 0 2px;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--border);
+}
+.rq-sub-findings .rq-finding {
+  padding: 8px 0;
+}
+.rq-sub-findings .rq-finding-title {
+  font-size: 13px;
+}
+.rq-sub-findings .rq-finding-snippet {
+  font-size: 13px;
+}
+
+/* Smaller ghost button for row actions. */
+.btn-mini {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+/* Icon-only quiet button (delete). Muted by default; danger only on hover. */
+.rq-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.rq-del:hover,
+.rq-del:focus-visible {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--card-2);
+}
+
+/* Segmented toggle inside the quick-add panel (Finding | Sub-question). */
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  align-self: flex-start;
+}
+.seg-btn {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.seg-btn.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Research picker: the "Add to sub-question →" narrowing panel. */
+.rq-narrow-toggle {
+  font-size: 12px;
+  padding: 3px 8px;
+}
+.rq-narrow {
+  margin: 6px 0 2px;
+  padding: 10px 12px;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.rq-narrow-group {
+  margin-top: 8px;
+}
+.rq-narrow-grouptitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.rq-narrow-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0 3px 2px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.rq-narrow-opt input {
+  margin-top: 3px;
+  flex: 0 0 auto;
 }

@@ -213,10 +213,30 @@ first read.
 {
   "items": [
     { "id": "rq-a1b2c3d4", "question": "How do makerspaces sustain funding?",
-      "detail": "", "status": "open", "createdAt": "…" }
+      "detail": "", "status": "open", "placement": null,
+      "groups": [
+        { "id": "rg-…", "title": "Grant dependence", "createdAt": "…",
+          "subQuestions": [
+            { "id": "rs-…", "question": "Which grants recur year to year?", "createdAt": "…" }
+          ] }
+      ],
+      "createdAt": "…" }
   ]
 }
 ```
+
+**Sub-question groups (a nested layer, not a separate collection).** Each
+overarching question carries `groups`: titled clusters, each owning a list of
+`subQuestions`. Ids use distinct prefixes — `rq-` overarching, `rg-` group,
+`rs-` sub-question. A **sub-question is independently taggable** by the same
+`research:` mechanism as an overarching question: its `rs-…` id can appear in a
+note's/reflection's `research:` list, and its findings are computed live by the
+same scan (see *Research findings*). A **group** (`rg-…`) is an organizational
+container only — never tagged, holds no findings of its own. Questions saved
+before this field get `groups: []` on read (back-compatible). Deleting a
+question, a group, or a sub-question scrubs the now-orphaned ids from tagged
+entries at delete *finalize* (after the undo window) — for a group, every
+sub-question id it contained.
 
 ### `companies.json`
 
@@ -285,10 +305,22 @@ scoped to events (it doesn't affect the reflection/to-do dots).
 
 **Findings are not stored here.** A question's nested findings are computed live
 by scanning which reflections and notes tagged themselves to its id via a
-`research: [rq-…]` frontmatter list — the same "derive from source, never
-hand-assign" rule as the to-do buckets. So both `reflections/*.md` and
+`research: […]` frontmatter list — the same "derive from source, never
+hand-assign" rule as the to-do buckets. The id may be an overarching question
+(`rq-…`) or a sub-question (`rs-…`); the scan buckets by whatever id it finds,
+so sub-questions need no special handling. So both `reflections/*.md` and
 `notes/*.md` carry an extra frontmatter line:
 
 ```yaml
 research: [rq-a1b2c3d4]
 ```
+
+**Most-specific-per-tree.** Tagging is *narrowing*, not stacking: for any one
+overarching question, an entry holds at most one id from that question's tree —
+either the `rq-…` id (tagged to the whole question) or one of its `rs-…`
+sub-question ids (narrowed). Narrowing to a sub-question in the picker replaces
+the overarching id rather than adding to it, so a finding is filed exactly once
+and never both under the sub-question and the overarching question's own direct
+count. An entry can still tag several *different* questions — the rule is one id
+per tree. Tagging the overarching question alone stays fully supported and is
+the default.

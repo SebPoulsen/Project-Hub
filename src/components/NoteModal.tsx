@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { ResearchChip } from "@/components/ResearchChip";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { PLACEMENT_LABEL } from "@/lib/placement-tag";
 import type { Note } from "@/lib/notes";
@@ -120,14 +120,11 @@ export function NoteModal({
                 {(note.research ?? [])
                   .filter((r) => researchTitles[r])
                   .map((r) => (
-                    <Link
+                    <ResearchChip
                       key={r}
+                      label={researchTitles[r]}
                       href="/research"
-                      className="chip chip-research"
-                      title={`Research: ${researchTitles[r]}`}
-                    >
-                      ◈ {researchTitles[r]}
-                    </Link>
+                    />
                   ))}
               </div>
             )}
