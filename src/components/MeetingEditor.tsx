@@ -8,6 +8,13 @@ import type { Meeting } from "@/lib/meetings";
 type SaveState = "idle" | "dirty" | "saving" | "saved";
 const DEBOUNCE_MS = 1500;
 
+// Chromium caps the total body of all in-flight `keepalive` fetches at 64KB and
+// rejects the request outright (a synchronous TypeError) once it's exceeded.
+// A long transcript blows past that, so `keepalive` is only safe for small
+// bodies; larger saves fall back to a normal fetch. 60KB leaves headroom under
+// the 64KB cap for the JSON envelope and any concurrent keepalive requests.
+const KEEPALIVE_MAX_BYTES = 60_000;
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -125,15 +132,19 @@ export function MeetingEditor({
     inFlight.current = true;
     setState("saving");
     try {
-      const payload = payloadOf(f);
+      const body = JSON.stringify(payloadOf(f));
+      // Only keep `keepalive` for small bodies — a long transcript exceeds the
+      // browser's keepalive size cap and the request is rejected silently.
+      const keepalive =
+        new TextEncoder().encode(body).length <= KEEPALIVE_MAX_BYTES;
       if (idRef.current) {
         await fetch(
           `/api/meetings?project=${encodeURIComponent(project)}&id=${encodeURIComponent(idRef.current)}`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            keepalive: true,
+            body,
+            keepalive,
           }
         );
       } else {
@@ -142,8 +153,8 @@ export function MeetingEditor({
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-            keepalive: true,
+            body,
+            keepalive,
           }
         ).then((r) => r.json());
         if (res?.id) {
@@ -153,6 +164,9 @@ export function MeetingEditor({
       }
       setState("saved");
       onSaved();
+    } catch {
+      // Surface the failure instead of leaving the label stuck on "Saving…".
+      setState("dirty");
     } finally {
       inFlight.current = false;
       if (pending.current) {
