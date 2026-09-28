@@ -61,22 +61,39 @@ function cmpLater(a: Todo, b: Todo): number {
   return a.createdAt.localeCompare(b.createdAt);
 }
 
+/**
+ * The four date buckets plus a `done` group. Completion is evaluated
+ * independently of the due date: a done todo lands in `done` no matter when it
+ * was due, so a finished task never lingers under Overdue/Today/etc.
+ */
+export interface BucketedTodos {
+  overdue: Todo[];
+  today: Todo[];
+  week: Todo[];
+  later: Todo[];
+  done: Todo[];
+}
+
 /** Group a flat todo list into sorted buckets for the current date. */
-export function bucketize(
-  todos: Todo[],
-  now: Date
-): Record<Bucket, Todo[]> {
-  const out: Record<Bucket, Todo[]> = {
+export function bucketize(todos: Todo[], now: Date): BucketedTodos {
+  const out: BucketedTodos = {
     overdue: [],
     today: [],
     week: [],
     later: [],
+    done: [],
   };
-  for (const t of todos) out[bucketOf(t, now)].push(t);
+  for (const t of todos) {
+    if (t.done) out.done.push(t);
+    else out[bucketOf(t, now)].push(t);
+  }
   out.overdue.sort(cmpDated);
   out.today.sort(cmpDated);
   out.week.sort(cmpDated);
   out.later.sort(cmpLater);
+  // No completion timestamp is stored, so approximate "recently finished"
+  // with newest-created first.
+  out.done.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return out;
 }
 

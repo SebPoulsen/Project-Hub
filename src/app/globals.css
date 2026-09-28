@@ -377,6 +377,30 @@ select:focus {
   padding: 8px 2px;
 }
 
+/* Done section: a collapsible, de-emphasized group below the date buckets */
+.tsection-toggle {
+  width: 100%;
+  align-items: center;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  padding: 0 0 6px;
+}
+.tsection-toggle .tsection-title {
+  color: var(--muted);
+}
+.tsection-toggle:hover .tsection-title {
+  color: var(--text);
+}
+.tsection-chevron {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1;
+}
+
 /* Items */
 .titem {
   display: flex;

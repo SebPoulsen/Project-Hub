@@ -62,6 +62,8 @@ export function TodoList({
   const [placeFilter, setPlaceFilter] = useState<PlacementFilterValue>("all");
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [now] = useState(() => new Date());
+  // Done items are hidden from the default view; this reveals them on demand.
+  const [showDone, setShowDone] = useState(false);
 
   // Inline edit + quick-reschedule state.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -401,6 +403,26 @@ export function TodoList({
       {renderSection("today", true)}
       {renderSection("week")}
       {renderSection("later")}
+
+      {buckets.done.length > 0 && (
+        <div className="tsection tsection-done">
+          <button
+            type="button"
+            className="tsection-head tsection-toggle"
+            aria-expanded={showDone}
+            onClick={() => setShowDone((v) => !v)}
+          >
+            <span className="tsection-chevron" aria-hidden="true">
+              {showDone ? "▾" : "▸"}
+            </span>
+            <span className="tsection-title">Done</span>
+            <span className="tsection-count">{buckets.done.length}</span>
+          </button>
+          {showDone && (
+            <div className="tsection-body">{buckets.done.map(renderItem)}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
