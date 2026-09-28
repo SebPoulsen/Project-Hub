@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { useHub } from "../providers";
 import { Lightbox } from "@/components/Lightbox";
 import { NoteModal } from "@/components/NoteModal";
+import { PdfAttachments } from "@/components/PdfAttachments";
+import { splitAttachments } from "@/lib/attachments";
 import { usePendingDeletes } from "@/components/PendingDeletes";
 import { ResearchPicker } from "@/components/ResearchPicker";
 import { ResearchChip } from "@/components/ResearchChip";
@@ -288,43 +290,52 @@ function NotesInner() {
 
             <PlacementPicker value={place} onChange={setPlace} />
 
-            {/* Existing attachments (edit mode) — click × to drop one */}
+            {/* Existing attachments (edit mode) — click × to drop one. Removal
+                takes effect on Save (the note's own delete carries undo). */}
             {keep.length > 0 && (
               <div>
                 <div className="label" style={{ marginBottom: 6 }}>
-                  Current images — keeping {keep.length}
+                  Current attachments — keeping {keep.length}
                 </div>
-                <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
-                  {keep.map((a) => (
-                    <div key={a} className="thumb-wrap">
-                      <img
-                        src={attachmentUrl(current.slug, a)}
-                        alt={a}
-                        className="thumb"
-                        onClick={() => setLightbox(attachmentUrl(current.slug, a))}
-                      />
-                      <button
-                        className="thumb-remove"
-                        title="Remove this image from the note"
-                        onClick={() =>
-                          setKeep((k) => k.filter((x) => x !== a))
-                        }
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                {splitAttachments(keep).images.length > 0 && (
+                  <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
+                    {splitAttachments(keep).images.map((a) => (
+                      <div key={a} className="thumb-wrap">
+                        <img
+                          src={attachmentUrl(current.slug, a)}
+                          alt={a}
+                          className="thumb"
+                          onClick={() => setLightbox(attachmentUrl(current.slug, a))}
+                        />
+                        <button
+                          className="thumb-remove"
+                          title="Remove this image from the note"
+                          onClick={() =>
+                            setKeep((k) => k.filter((x) => x !== a))
+                          }
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <PdfAttachments
+                  project={current.slug}
+                  files={splitAttachments(keep).pdfs}
+                  entryId={mode.kind === "edit" ? mode.id : undefined}
+                  onRemove={(f) => setKeep((k) => k.filter((x) => x !== f))}
+                />
               </div>
             )}
 
             <div className="row between">
               <label className="stack" style={{ gap: 4 }}>
-                <span className="label">Add images</span>
+                <span className="label">Add images or PDF</span>
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,application/pdf,.pdf"
                   multiple
                   style={{ width: "auto", border: "none", padding: 0 }}
                 />
@@ -405,7 +416,8 @@ function NoteCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const cover = (meta.attachments ?? [])[0];
+  const { images, pdfs } = splitAttachments(meta.attachments ?? []);
+  const cover = images[0];
   const linkedQuestions = (meta.research ?? []).filter((id) => researchTitles[id]);
 
   return (
@@ -454,6 +466,7 @@ function NoteCard({
           style={{ pointerEvents: "none" }}
         />
       )}
+      <PdfAttachments project={project} files={pdfs} entryId={meta.id} />
       {/* Action buttons stop propagation so they don't also open the modal. */}
       <div className="row" style={{ justifyContent: "flex-end", gap: 6, marginTop: 12 }}>
         <button

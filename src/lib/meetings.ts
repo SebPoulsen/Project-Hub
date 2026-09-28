@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import matter from "gray-matter";
-import { meetingsDir, exists } from "./paths";
+import { meetingsDir, attachmentsDir, exists } from "./paths";
 import { toDateStr } from "./notes";
 import { cryptoRandomId, today } from "./projects";
 import { normalizePlacementTag, type PlacementTag } from "./placement-tag";
@@ -9,8 +9,10 @@ import { normalizePlacementTag, type PlacementTag } from "./placement-tag";
 /**
  * Meeting notes: structured logging of meetings that already happened (paste a
  * transcript or notes). Same file pattern as notes — Markdown + frontmatter in
- * a `meetings/` dir — but a distinct entity: no attachments, plus a `meeting`
- * field (the meeting name/series this entry belongs to) that the UI tags by.
+ * a `meetings/` dir — plus a `meeting` field (the meeting name/series this entry
+ * belongs to) that the UI tags by. Text is primary; a meeting may also carry PDF
+ * attachments (the real document that travelled with it), tracked in the
+ * frontmatter `attachments:` list and stored under the project's attachments/.
  */
 export interface MeetingMeta {
   id: string; // filename without .md
@@ -19,6 +21,7 @@ export interface MeetingMeta {
   date: string;
   tags: string[];
   placement: PlacementTag | null; // optional within-project placement tag
+  attachments: string[]; // attachment filenames (PDFs); [] when none
   preview?: string; // short body preview for list cards (set by listMeetings)
 }
 
@@ -51,6 +54,9 @@ export async function listMeetings(slug: string): Promise<MeetingMeta[]> {
       date: toDateStr(data.date),
       tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
       placement: normalizePlacementTag(data.placement),
+      attachments: Array.isArray(data.attachments)
+        ? data.attachments.map(String)
+        : [],
       preview: makePreview(content),
     });
   }
@@ -74,6 +80,9 @@ export async function readMeeting(
     date: toDateStr(data.date),
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
     placement: normalizePlacementTag(data.placement),
+    attachments: Array.isArray(data.attachments)
+      ? data.attachments.map(String)
+      : [],
     body: content.trim(),
   };
 }
@@ -98,8 +107,13 @@ export interface MeetingInput {
   body: string;
 }
 
-function serialize(input: MeetingInput, slug: string): string {
+function serialize(
+  input: MeetingInput,
+  slug: string,
+  attachments: string[]
+): string {
   const tags = input.tags.length ? `[${input.tags.join(", ")}]` : "[]";
+  const attachYaml = attachments.length ? `[${attachments.join(", ")}]` : "[]";
   return [
     "---",
     `title: ${input.title || "Untitled meeting"}`,
@@ -108,11 +122,18 @@ function serialize(input: MeetingInput, slug: string): string {
     `project: ${slug}`,
     `tags: ${tags}`,
     ...(input.placement ? [`placement: ${input.placement}`] : []),
+    `attachments: ${attachYaml}`,
     "---",
     "",
     input.body.trim(),
     "",
   ].join("\n");
+}
+
+/** Sanitize a user-supplied attachment filename to a safe basename. */
+function safeFilename(name: string): string {
+  const base = path.basename(name).replace(/[^a-zA-Z0-9._-]/g, "_");
+  return base || `file-${cryptoRandomId()}`;
 }
 
 export async function createMeeting(
@@ -140,8 +161,11 @@ export async function createMeeting(
     placement: normalizePlacementTag(input.placement),
     body: input.body ?? "",
   };
-  await fs.writeFile(path.join(meetingsDir(slug), `${id}.md`), serialize(full, slug));
-  return { id, ...full, body: full.body.trim() };
+  await fs.writeFile(
+    path.join(meetingsDir(slug), `${id}.md`),
+    serialize(full, slug, [])
+  );
+  return { id, ...full, body: full.body.trim(), attachments: [] };
 }
 
 export async function updateMeeting(
@@ -166,13 +190,117 @@ export async function updateMeeting(
         : existing.placement,
     body: input.body ?? existing.body,
   };
-  await fs.writeFile(path.join(meetingsDir(slug), `${id}.md`), serialize(full, slug));
-  return { id, ...full, body: full.body.trim() };
+  // Attachments are managed only via add/removeMeetingAttachment (a separate
+  // multipart endpoint), never through this text autosave — so preserve
+  // whatever the file already has.
+  await fs.writeFile(
+    path.join(meetingsDir(slug), `${id}.md`),
+    serialize(full, slug, existing.attachments)
+  );
+  return { id, ...full, body: full.body.trim(), attachments: existing.attachments };
 }
 
-export async function deleteMeeting(slug: string, id: string): Promise<boolean> {
-  const file = path.join(meetingsDir(slug), `${id}.md`);
-  if (!(await exists(file))) return false;
-  await fs.unlink(file).catch(() => {});
-  return true;
+/**
+ * Save one uploaded attachment for a meeting and add it to the frontmatter list.
+ * The stored filename is prefixed with the meeting id (and de-duplicated), so a
+ * given attachment belongs to exactly one meeting.
+ */
+export async function addMeetingAttachment(
+  slug: string,
+  id: string,
+  file: { filename: string; bytes: Buffer }
+): Promise<Meeting | null> {
+  const existing = await readMeeting(slug, id);
+  if (!existing) return null;
+  await fs.mkdir(attachmentsDir(slug), { recursive: true });
+
+  let fname = `${id}-${safeFilename(file.filename)}`;
+  let k = 2;
+  while (await exists(path.join(attachmentsDir(slug), fname))) {
+    fname = `${id}-${k++}-${safeFilename(file.filename)}`;
+  }
+  await fs.writeFile(path.join(attachmentsDir(slug), fname), file.bytes);
+
+  const attachments = [...existing.attachments, fname];
+  await fs.writeFile(
+    path.join(meetingsDir(slug), `${id}.md`),
+    serialize(existing, slug, attachments)
+  );
+  return { ...existing, attachments };
+}
+
+/**
+ * Remove an attachment from a meeting and delete the file if nothing else
+ * references it. Returns the updated meeting, or null if the meeting is gone.
+ */
+export async function removeMeetingAttachment(
+  slug: string,
+  id: string,
+  filename: string
+): Promise<Meeting | null> {
+  const existing = await readMeeting(slug, id);
+  if (!existing) return null;
+  const attachments = existing.attachments.filter((a) => a !== filename);
+  await fs.writeFile(
+    path.join(meetingsDir(slug), `${id}.md`),
+    serialize(existing, slug, attachments)
+  );
+  await removeOrphans(slug, [filename], id);
+  return { ...existing, attachments };
+}
+
+export async function deleteMeeting(
+  slug: string,
+  id: string
+): Promise<{ removedAttachments: string[] } | null> {
+  const meeting = await readMeeting(slug, id);
+  if (!meeting) return null;
+  await fs.unlink(path.join(meetingsDir(slug), `${id}.md`)).catch(() => {});
+  const removed = await removeOrphans(slug, meeting.attachments, id);
+  return { removedAttachments: removed };
+}
+
+/**
+ * Is `filename` referenced by any meeting OTHER than `exceptId`? Meeting
+ * attachments are id-prefixed so they belong to a single meeting, but scan
+ * anyway to stay safe against manual edits.
+ */
+async function isReferenced(
+  slug: string,
+  filename: string,
+  exceptId: string
+): Promise<boolean> {
+  const dir = meetingsDir(slug);
+  if (!(await exists(dir))) return false;
+  const files = (await fs.readdir(dir)).filter((f) => f.endsWith(".md"));
+  for (const f of files) {
+    if (f.replace(/\.md$/, "") === exceptId) continue;
+    const raw = await fs.readFile(path.join(dir, f), "utf8");
+    const { data, content } = matter(raw);
+    const listed =
+      Array.isArray(data.attachments) &&
+      data.attachments.map(String).includes(filename);
+    if (listed || content.includes(filename)) return true;
+  }
+  return false;
+}
+
+/** Delete each file not referenced by any meeting except `exceptId`. */
+async function removeOrphans(
+  slug: string,
+  files: string[],
+  exceptId: string
+): Promise<string[]> {
+  const removed: string[] = [];
+  for (const f of files) {
+    if (path.basename(f) !== f) continue; // only touch plain basenames
+    if (await isReferenced(slug, f, exceptId)) continue;
+    try {
+      await fs.unlink(path.join(attachmentsDir(slug), f));
+      removed.push(f);
+    } catch {
+      // already gone — ignore
+    }
+  }
+  return removed;
 }

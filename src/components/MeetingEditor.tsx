@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { PlacementPicker } from "@/components/PlacementPicker";
+import { PdfAttachments } from "@/components/PdfAttachments";
+import { usePendingDeletes } from "@/components/PendingDeletes";
+import { attachmentLabel } from "@/lib/attachments";
 import type { PlacementTag } from "@/lib/placement-tag";
 import type { Meeting } from "@/lib/meetings";
 
@@ -67,6 +70,14 @@ export function MeetingEditor({
   const [state, setState] = useState<SaveState>(initialId ? "idle" : "idle");
   const [loading, setLoading] = useState(!!initialId);
 
+  // Attached PDFs (managed via a separate multipart endpoint, not the text
+  // autosave). Display-only state here; the file on disk is the source of truth.
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [attachBusy, setAttachBusy] = useState(false);
+  const [attachErr, setAttachErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const { scheduleDelete } = usePendingDeletes();
+
   const idRef = useRef<string | null>(initialId);
   const latest = useRef<FormState>(EMPTY);
   latest.current = form;
@@ -93,6 +104,7 @@ export function MeetingEditor({
           placement: m.placement ?? null,
           body: m.body ?? "",
         });
+        setAttachments(m.attachments ?? []);
         setState("idle");
       })
       .finally(() => !cancelled && setLoading(false));
@@ -206,6 +218,74 @@ export function MeetingEditor({
     if (state === "dirty" || state === "saving") save();
   };
 
+  // A PDF can only attach to a saved meeting (it needs an id). For a new
+  // meeting, flush a save first; if it's still empty there's nothing to attach
+  // to, so ask for some text.
+  const ensureSaved = useCallback(async (): Promise<string | null> => {
+    if (idRef.current) return idRef.current;
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    await save();
+    return idRef.current;
+  }, [save]);
+
+  const onPickPdf = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file later
+    if (!file) return;
+    setAttachErr(null);
+    if (!/\.pdf$/i.test(file.name)) {
+      setAttachErr("Only PDF files are supported.");
+      return;
+    }
+    setAttachBusy(true);
+    try {
+      const mid = await ensureSaved();
+      if (!mid) {
+        setAttachErr("Add a title or note first, then attach a PDF.");
+        return;
+      }
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(
+        `/api/meetings/attachments?project=${encodeURIComponent(project)}&id=${encodeURIComponent(mid)}`,
+        { method: "POST", body: fd }
+      );
+      if (res.ok) {
+        const updated: Meeting = await res.json();
+        setAttachments(updated.attachments ?? []);
+        onSaved();
+      } else {
+        const j = await res.json().catch(() => null);
+        setAttachErr(j?.error ?? "Upload failed.");
+      }
+    } finally {
+      setAttachBusy(false);
+    }
+  };
+
+  // Soft-delete + undo, like the rest of the app: hide immediately, and only
+  // fire the real remove (file + frontmatter + commit) after the undo window.
+  const removePdf = (file: string) => {
+    const mid = idRef.current;
+    if (!mid) return;
+    setAttachments((a) => a.filter((x) => x !== file));
+    scheduleDelete({
+      label: `PDF "${attachmentLabel(file)}" removed`,
+      perform: async () => {
+        await fetch(
+          `/api/meetings/attachments?project=${encodeURIComponent(project)}&id=${encodeURIComponent(mid)}&file=${encodeURIComponent(file)}`,
+          { method: "DELETE" }
+        );
+        onSaved();
+      },
+      onUndo: () =>
+        setAttachments((a) => (a.includes(file) ? a : [...a, file])),
+    });
+  };
+
   const label =
     state === "saving"
       ? "Saving…"
@@ -269,6 +349,35 @@ export function MeetingEditor({
           scheduleSave();
         }}
       />
+
+      {/* PDF attachments — a real document that travels with the meeting. */}
+      <div className="stack" style={{ gap: 6 }}>
+        <PdfAttachments
+          project={project}
+          files={attachments}
+          entryId={idRef.current ?? undefined}
+          onRemove={removePdf}
+        />
+        <div className="row" style={{ gap: 10, alignItems: "center" }}>
+          <label className="btn btn-ghost" style={{ cursor: "pointer" }}>
+            {attachBusy ? "Attaching…" : "📎 Attach PDF"}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              disabled={attachBusy}
+              onChange={onPickPdf}
+              style={{ display: "none" }}
+            />
+          </label>
+          {attachErr && (
+            <span className="muted" style={{ fontSize: 13, color: "var(--danger)" }}>
+              {attachErr}
+            </span>
+          )}
+        </div>
+      </div>
+
       <div className="row between">
         <span className={`save-state ${state === "saving" ? "saving" : ""}`}>
           {label}

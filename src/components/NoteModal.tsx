@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { ResearchChip } from "@/components/ResearchChip";
+import { PdfAttachments } from "@/components/PdfAttachments";
 import { useScrollLock } from "@/lib/useScrollLock";
+import { splitAttachments } from "@/lib/attachments";
 import { PLACEMENT_LABEL } from "@/lib/placement-tag";
 import type { Note } from "@/lib/notes";
 
@@ -142,7 +144,7 @@ export function NoteModal({
               </p>
             )}
 
-            {(note.attachments ?? []).map((a) => {
+            {splitAttachments(note.attachments ?? []).images.map((a) => {
               const url = attachmentUrl(project, a);
               return (
                 <img
@@ -154,6 +156,11 @@ export function NoteModal({
                 />
               );
             })}
+            <PdfAttachments
+              project={project}
+              files={splitAttachments(note.attachments ?? []).pdfs}
+              entryId={note.id}
+            />
 
             <div
               className="row"

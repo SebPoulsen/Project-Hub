@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useScrollLock } from "@/lib/useScrollLock";
 import { PLACEMENT_LABEL } from "@/lib/placement-tag";
+import { PdfAttachments } from "@/components/PdfAttachments";
 import type { Meeting } from "@/lib/meetings";
 
 /**
@@ -107,6 +108,11 @@ export function MeetingModal({
                 {meeting.body}
               </p>
             )}
+            <PdfAttachments
+              project={project}
+              files={meeting.attachments ?? []}
+              entryId={meeting.id}
+            />
             <div
               className="row"
               style={{ justifyContent: "flex-end", gap: 6, marginTop: 18 }}

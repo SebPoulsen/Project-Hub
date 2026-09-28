@@ -8,6 +8,7 @@ import {
 } from "./paths";
 import { cryptoRandomId, today } from "./projects";
 import { normalizePlacementTag, type PlacementTag } from "./placement-tag";
+import { isImageAttachment } from "./attachments";
 
 export interface NoteMeta {
   id: string; // filename without .md
@@ -167,7 +168,11 @@ export async function createNote(
   const tags = input.tags.length ? `[${input.tags.join(", ")}]` : "[]";
   const research = input.research.length ? `[${input.research.join(", ")}]` : "[]";
   const attachYaml = savedNames.length ? `[${savedNames.join(", ")}]` : "[]";
+  // Only images get an inline markdown image line (so the raw .md previews
+  // them). PDFs are tracked in frontmatter `attachments:` only — an `![]()` on
+  // a PDF would render as a broken image.
   const imageBlock = savedNames
+    .filter(isImageAttachment)
     .map((f) => `![${f}](../attachments/${f})`)
     .join("\n\n");
 
@@ -183,7 +188,7 @@ export async function createNote(
     "---",
     "",
     input.body.trim(),
-    savedNames.length ? "\n" + imageBlock + "\n" : "",
+    imageBlock ? "\n" + imageBlock + "\n" : "",
   ].join("\n");
 
   await fs.writeFile(path.join(notesDir(slug), `${id}.md`), md);
@@ -245,6 +250,7 @@ export async function updateNote(
     ? `[${finalAttachments.join(", ")}]`
     : "[]";
   const imageBlock = finalAttachments
+    .filter(isImageAttachment)
     .map((f) => `![${f}](../attachments/${f})`)
     .join("\n\n");
 
@@ -260,7 +266,7 @@ export async function updateNote(
     "---",
     "",
     input.body.trim(),
-    finalAttachments.length ? "\n" + imageBlock + "\n" : "",
+    imageBlock ? "\n" + imageBlock + "\n" : "",
   ].join("\n");
 
   await fs.writeFile(path.join(notesDir(slug), `${id}.md`), md);

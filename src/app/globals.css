@@ -1013,6 +1013,69 @@ a.chip-research:hover {
   justify-content: center;
 }
 
+/* Attached PDFs — a clickable link/chip on cards, in modals, and in editors. */
+.pdf-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.pdf-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-2);
+  overflow: hidden;
+}
+.pdf-chip-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 10px;
+  color: var(--text);
+  font-size: 13px;
+}
+.pdf-chip-link:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.pdf-icon {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--danger);
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 1px 3px;
+}
+.pdf-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pdf-remove {
+  flex: 0 0 auto;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  padding: 6px 9px;
+  cursor: pointer;
+  align-self: stretch;
+}
+.pdf-remove:hover {
+  color: var(--danger);
+  background: var(--card);
+}
+
 /* Generic centered modal (day-detail popover) */
 .modal-overlay {
   position: fixed;

@@ -5,6 +5,7 @@ import { useHub } from "../providers";
 import { usePendingDeletes } from "@/components/PendingDeletes";
 import { MeetingModal } from "@/components/MeetingModal";
 import { MeetingEditor } from "@/components/MeetingEditor";
+import { PdfAttachments } from "@/components/PdfAttachments";
 import { PlacementFilter } from "@/components/PlacementFilter";
 import { copyPlainText } from "@/lib/clipboard";
 import { formatTagLine } from "@/lib/tag-summary";
@@ -192,6 +193,7 @@ export default function MeetingsPage() {
             {visible.map((m) => (
               <MeetingCard
                 key={m.id}
+                project={slug}
                 meta={m}
                 onOpen={() => setViewingId(m.id)}
                 onEdit={() => openEdit(m.id)}
@@ -223,11 +225,13 @@ export default function MeetingsPage() {
 }
 
 function MeetingCard({
+  project,
   meta,
   onOpen,
   onEdit,
   onDelete,
 }: {
+  project: string;
   meta: MeetingMeta;
   onOpen: () => void;
   onEdit: () => void;
@@ -270,6 +274,11 @@ function MeetingCard({
         </div>
       )}
       {meta.preview && <p className="note-preview">{meta.preview}</p>}
+      <PdfAttachments
+        project={project}
+        files={meta.attachments ?? []}
+        entryId={meta.id}
+      />
       <div className="row" style={{ justifyContent: "flex-end", gap: 6, marginTop: 12 }}>
         <button
           className="btn btn-ghost"

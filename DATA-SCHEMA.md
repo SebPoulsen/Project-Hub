@@ -131,14 +131,21 @@ Body text…
 ```
 
 Attachments live in the sibling `attachments/` folder and are referenced by
-relative path, so a project folder is fully self-contained and portable.
+relative path, so a project folder is fully self-contained and portable. Two
+kinds are supported: **images** (embedded inline in the body as `![](…)` so the
+raw `.md` previews them) and **PDFs** (a real document that travels with the
+entry — listed in `attachments:` only, never in the body, and surfaced in the UI
+as a clickable link that opens the PDF in a new tab). Text is always primary;
+attachments are optional extras. Each stored file is named `<entryId>-<name>`, so
+it belongs to exactly one entry; removing the last reference deletes the file.
 
 ### `meetings/<id>.md`
 
 Meeting notes — structured logging of meetings that already happened (paste a
-transcript or notes). Same file pattern as notes, but a distinct type: no
-attachments, plus a `meeting` field naming the meeting/series it belongs to (the
-UI tags and filters by it).
+transcript or notes). Same file pattern as notes, plus a `meeting` field naming
+the meeting/series it belongs to (the UI tags and filters by it). Meetings may
+carry **PDF attachments** (same `attachments/` storage and `attachments:`
+frontmatter as notes; PDF only, no inline images).
 
 ```markdown
 ---
@@ -147,10 +154,26 @@ meeting: Weekly sync
 date: 2026-09-10
 project: my-first-project
 tags: [planning]
+attachments: [2026-09-10-kickoff-with-mentor-Agenda.pdf]
 ---
 
 Pasted transcript / notes…
 ```
+
+Meeting **text** is saved by a debounced JSON autosave, which never touches the
+`attachments:` list; PDF **add/remove** go through a separate multipart endpoint
+(`/api/meetings/attachments`), each its own commit. Both write paths for a
+project are serialized through one lock so they can't clobber the same file.
+
+> **⚠️ Binary attachments grow git history.** Every project folder is its own git
+> repo, and each change is committed. Plain text (notes, transcripts, todos)
+> diffs and compresses well, so history stays small. **Binary files — PDFs and
+> images — do not:** git stores each version whole, and replacing or re-adding a
+> file keeps every prior copy in history forever, even after the file is deleted
+> from the working tree. A handful of PDFs is fine; be aware that many large
+> ones, or frequently-replaced ones, will inflate the repo's `.git/` over time.
+> If that ever matters, the fix is out-of-band history pruning (e.g.
+> `git gc` / history rewrite), not something the app does automatically.
 
 ### `evaluations/individual.json`
 

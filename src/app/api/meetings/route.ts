@@ -9,6 +9,7 @@ import {
   type MeetingInput,
 } from "@/lib/meetings";
 import { commitAll } from "@/lib/git";
+import { withLock } from "@/lib/lock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,12 +39,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "project is required" }, { status: 400 });
   }
   const body = (await req.json()) as Partial<MeetingInput>;
-  const m = await createMeeting(project, body);
-  const hash = await commitAll(
-    project,
-    `meeting: ${m.id}${m.meeting ? ` (${m.meeting})` : ""}`
-  );
-  return NextResponse.json({ ...m, commit: hash }, { status: 201 });
+  const m = await withLock(project, async () => {
+    const created = await createMeeting(project, body);
+    const hash = await commitAll(
+      project,
+      `meeting: ${created.id}${created.meeting ? ` (${created.meeting})` : ""}`
+    );
+    return { ...created, commit: hash };
+  });
+  return NextResponse.json(m, { status: 201 });
 }
 
 export async function PUT(req: Request) {
@@ -57,10 +61,14 @@ export async function PUT(req: Request) {
     );
   }
   const body = (await req.json()) as Partial<MeetingInput>;
-  const m = await updateMeeting(project, id, body);
+  const m = await withLock(project, async () => {
+    const updated = await updateMeeting(project, id, body);
+    if (!updated) return null;
+    const hash = await commitAll(project, `meeting: edit ${updated.id}`);
+    return { ...updated, commit: hash };
+  });
   if (!m) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const hash = await commitAll(project, `meeting: edit ${m.id}`);
-  return NextResponse.json({ ...m, commit: hash });
+  return NextResponse.json(m);
 }
 
 export async function DELETE(req: Request) {
@@ -73,8 +81,16 @@ export async function DELETE(req: Request) {
       { status: 400 }
     );
   }
-  const ok = await deleteMeeting(project, id);
-  if (!ok) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const hash = await commitAll(project, `meeting: delete ${id}`);
-  return NextResponse.json({ ok: true, commit: hash });
+  const result = await withLock(project, async () => {
+    const r = await deleteMeeting(project, id);
+    if (!r) return null;
+    const removed = r.removedAttachments.length;
+    const hash = await commitAll(
+      project,
+      `meeting: delete ${id}${removed ? ` (-${removed} attachment${removed > 1 ? "s" : ""})` : ""}`
+    );
+    return { ...r, commit: hash };
+  });
+  if (!result) return NextResponse.json({ error: "not found" }, { status: 404 });
+  return NextResponse.json({ ok: true, ...result });
 }
