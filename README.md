@@ -29,6 +29,31 @@ npm run dev       # then open http://localhost:4321
 
 ---
 
+## Running the app
+
+**The production server on port 4321 is the live app** — the one launched by
+`start.command` / `npm start`, serving the build in `.next/`. Treat it and its
+`.next/` build folder as untouchable while it is running.
+
+**Rule for any automated/assisted work in this repo (applies to Claude too):**
+
+- **Never stop, kill, or overwrite the running production server (port 4321) or
+  its `.next/` build folder.** Running `next dev` or `next build` against the
+  default `.next/` clobbers the live build, so don't point dev tooling at it.
+- **For browser verification, use a throwaway dev server on a different port
+  with its own build directory** — it builds into `.next-dev/` (set via the
+  `PROJECTHUB_DISTDIR` env var) and never touches production's `.next/`:
+
+  ```bash
+  npm run dev:verify    # next dev on http://localhost:4322, builds into .next-dev/
+  ```
+
+- **If production needs a rebuild** (to pick up a change on 4321), that is a
+  separate, explicit final step — flag it first, then run `npm run build`
+  followed by `npm start`. Never fold it silently into verification.
+
+---
+
 ## Where your data lives
 
 ```

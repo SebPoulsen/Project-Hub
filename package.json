@@ -7,7 +7,8 @@
     "dev": "next dev -p 4321",
     "build": "next build",
     "start": "next start -p 4321",
-    "launch": "next dev -p 4321"
+    "launch": "next dev -p 4321",
+    "dev:verify": "PROJECTHUB_DISTDIR=.next-dev next dev -p 4322"
   },
   "dependencies": {
     "gray-matter": "4.0.3",
