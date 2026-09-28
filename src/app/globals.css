@@ -145,6 +145,16 @@ h3,
   color: var(--muted);
   font-size: 14px;
   cursor: pointer;
+  /* Reset native <button> chrome so a <button class="nav-link"> (e.g. the
+     Past entries list) matches the anchor nav-links across all themes. Without
+     this it falls back to the UA button background (light gray, ignoring the
+     theme), plus a native border and font. */
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
 }
 .nav-link:hover {
   background: var(--card-2);
