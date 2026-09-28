@@ -40,13 +40,23 @@ npm run dev       # then open http://localhost:4321
 - **Never stop, kill, or overwrite the running production server (port 4321) or
   its `.next/` build folder.** Running `next dev` or `next build` against the
   default `.next/` clobbers the live build, so don't point dev tooling at it.
-- **For browser verification, use a throwaway dev server on a different port
-  with its own build directory** — it builds into `.next-dev/` (set via the
-  `PROJECTHUB_DISTDIR` env var) and never touches production's `.next/`:
+- **For browser verification, use the throwaway dev server** — a different port,
+  its own build directory, **and its own data directory**, so it never touches
+  production's `.next/` *or* your real data in iCloud:
 
   ```bash
-  npm run dev:verify    # next dev on http://localhost:4322, builds into .next-dev/
+  npm run dev:verify    # next dev on http://localhost:4322
   ```
+
+  It sets three overrides (see the `dev:verify` script in `package.json`):
+  - `PROJECTHUB_DISTDIR=.next-dev` — builds into `.next-dev/`, not `.next/`.
+  - `PROJECTHUB_DATA_DIR=$PWD/.dev-data` — reads/writes a **throwaway
+    `.dev-data/` folder**, never the live `~/…/CloudDocs/ProjectHub` data.
+
+  **Verification must never write to the real data repo.** Any test that
+  creates, edits, or deletes entries runs against `.dev-data/` (start it empty
+  and make a scratch project there); the real iCloud folder is only ever *read*.
+  Both `.next-dev/` and `.dev-data/` are gitignored.
 
 - **If production needs a rebuild** (to pick up a change on 4321), that is a
   separate, explicit final step — flag it first, then run `npm run build`

@@ -4,6 +4,7 @@
 /node_modules
 /.next
 /.next-dev
+/.dev-data
 /out
 /build
 *.tsbuildinfo
