@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useHub } from "../providers";
 import { Lightbox } from "@/components/Lightbox";
@@ -54,10 +54,25 @@ function NotesInner() {
   const [place, setPlace] = useState<PlacementTag | null>(null);
   const [placeFilter, setPlaceFilter] = useState<PlacementFilterValue>("all");
   const [keep, setKeep] = useState<string[]>([]); // existing attachments to retain (edit)
+  // Files picked but not yet saved. Accumulated across picks (a native file
+  // input replaces its selection each time, so reading it at Save would drop
+  // everything but the last pick). `url` is an object URL for image previews.
+  const [pending, setPending] = useState<{ file: File; url: string | null }[]>([]);
+  const [fileErr, setFileErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { scheduleDelete } = usePendingDeletes();
+
+  // Revoke any pending image object URLs when the page unmounts (normal close
+  // flows revoke via clearPending/removePending).
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  useEffect(() => {
+    return () => {
+      pendingRef.current.forEach((p) => p.url && URL.revokeObjectURL(p.url));
+    };
+  }, []);
 
   async function load() {
     if (!current) return;
@@ -97,6 +112,14 @@ function NotesInner() {
     if (openId) setViewingId(openId);
   }, [openId]);
 
+  function clearPending() {
+    setPending((prev) => {
+      prev.forEach((p) => p.url && URL.revokeObjectURL(p.url));
+      return [];
+    });
+    setFileErr(null);
+  }
+
   function resetForm() {
     setTitle("");
     setBody("");
@@ -104,7 +127,41 @@ function NotesInner() {
     setResearch([]);
     setPlace(null);
     setKeep([]);
+    clearPending();
     if (fileRef.current) fileRef.current.value = "";
+  }
+
+  const isImageFile = (f: File) => f.type.startsWith("image/");
+  const isPdfFile = (f: File) =>
+    f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+
+  // Accumulate picked files instead of relying on the input's live selection
+  // (which each pick replaces). Images and PDFs are kept; anything else is
+  // skipped with a message.
+  function onPickFiles(e: ChangeEvent<HTMLInputElement>) {
+    const picked = Array.from(e.target.files ?? []);
+    e.target.value = ""; // let the same file be re-picked; drop stale selection
+    if (picked.length === 0) return;
+    const ok = picked.filter((f) => isImageFile(f) || isPdfFile(f));
+    const skipped = picked.length - ok.length;
+    setPending((prev) => [
+      ...prev,
+      ...ok.map((f) => ({ file: f, url: isImageFile(f) ? URL.createObjectURL(f) : null })),
+    ]);
+    setFileErr(
+      skipped
+        ? `${skipped} unsupported file${skipped > 1 ? "s" : ""} skipped (images and PDFs only).`
+        : null
+    );
+  }
+
+  function removePending(idx: number) {
+    setPending((prev) => {
+      const next = prev.slice();
+      const [removed] = next.splice(idx, 1);
+      if (removed?.url) URL.revokeObjectURL(removed.url);
+      return next;
+    });
   }
 
   function openCreate() {
@@ -135,8 +192,8 @@ function NotesInner() {
 
   async function submit() {
     if (!current || mode.kind === "closed") return;
-    const hasNewFiles = !!fileRef.current?.files?.length;
-    if (!title.trim() && !body.trim() && !hasNewFiles && keep.length === 0) return;
+    if (!title.trim() && !body.trim() && pending.length === 0 && keep.length === 0)
+      return;
 
     setBusy(true);
     const fd = new FormData();
@@ -145,8 +202,9 @@ function NotesInner() {
     fd.append("tags", tags);
     fd.append("research", research.join(","));
     fd.append("placement", place ?? "");
-    const files = fileRef.current?.files;
-    if (files) for (const f of Array.from(files)) fd.append("files", f);
+    // Upload the accumulated picks (across every round), not the input's last
+    // selection.
+    for (const { file } of pending) fd.append("files", file);
 
     if (mode.kind === "create") {
       await fetch(`/api/notes?project=${encodeURIComponent(current.slug)}`, {
@@ -329,6 +387,59 @@ function NotesInner() {
               </div>
             )}
 
+            {/* Files picked but not yet saved — accumulated across picks, each
+                removable, attached on Save. */}
+            {pending.length > 0 && (
+              <div>
+                <div className="label" style={{ marginBottom: 6 }}>
+                  To attach on save — {pending.length}
+                </div>
+                <div
+                  className="row"
+                  style={{ flexWrap: "wrap", gap: 10, alignItems: "center" }}
+                >
+                  {pending.map((p, i) =>
+                    p.url ? (
+                      <div key={i} className="thumb-wrap">
+                        <img src={p.url} alt={p.file.name} className="thumb" />
+                        <button
+                          className="thumb-remove"
+                          title="Remove this file"
+                          onClick={() => removePending(i)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <span key={i} className="pdf-chip">
+                        <span className="pdf-chip-link" style={{ cursor: "default" }}>
+                          <span className="pdf-icon" aria-hidden="true">
+                            PDF
+                          </span>
+                          <span className="pdf-name">{p.file.name}</span>
+                        </span>
+                        <button
+                          type="button"
+                          className="pdf-remove"
+                          title="Remove this file"
+                          aria-label={`Remove ${p.file.name}`}
+                          onClick={() => removePending(i)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+
+            {fileErr && (
+              <div className="muted" style={{ fontSize: 13, color: "var(--danger)" }}>
+                {fileErr}
+              </div>
+            )}
+
             <div className="row between">
               <label className="stack" style={{ gap: 4 }}>
                 <span className="label">Add images or PDF</span>
@@ -337,6 +448,7 @@ function NotesInner() {
                   type="file"
                   accept="image/*,application/pdf,.pdf"
                   multiple
+                  onChange={onPickFiles}
                   style={{ width: "auto", border: "none", padding: 0 }}
                 />
               </label>
