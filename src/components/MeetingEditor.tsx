@@ -232,11 +232,13 @@ export function MeetingEditor({
   }, [save]);
 
   const onPickPdf = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const picked = Array.from(e.target.files ?? []);
     e.target.value = ""; // allow re-picking the same file later
-    if (!file) return;
+    if (picked.length === 0) return;
     setAttachErr(null);
-    if (!/\.pdf$/i.test(file.name)) {
+    const pdfs = picked.filter((f) => /\.pdf$/i.test(f.name));
+    const nonPdf = picked.length - pdfs.length;
+    if (pdfs.length === 0) {
       setAttachErr("Only PDF files are supported.");
       return;
     }
@@ -247,20 +249,29 @@ export function MeetingEditor({
         setAttachErr("Add a title or note first, then attach a PDF.");
         return;
       }
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch(
-        `/api/meetings/attachments?project=${encodeURIComponent(project)}&id=${encodeURIComponent(mid)}`,
-        { method: "POST", body: fd }
-      );
-      if (res.ok) {
-        const updated: Meeting = await res.json();
-        setAttachments(updated.attachments ?? []);
-        onSaved();
-      } else {
-        const j = await res.json().catch(() => null);
-        setAttachErr(j?.error ?? "Upload failed.");
+      // Upload sequentially — each request appends to the file's list on the
+      // server (read-modify-write under the per-project lock), so serial keeps
+      // the returned list cumulative and correct.
+      let failed = 0;
+      for (const file of pdfs) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch(
+          `/api/meetings/attachments?project=${encodeURIComponent(project)}&id=${encodeURIComponent(mid)}`,
+          { method: "POST", body: fd }
+        );
+        if (res.ok) {
+          const updated: Meeting = await res.json();
+          setAttachments(updated.attachments ?? []);
+        } else {
+          failed++;
+        }
       }
+      onSaved();
+      const problems: string[] = [];
+      if (nonPdf) problems.push(`${nonPdf} non-PDF file${nonPdf > 1 ? "s" : ""} skipped`);
+      if (failed) problems.push(`${failed} upload${failed > 1 ? "s" : ""} failed`);
+      if (problems.length) setAttachErr(`${problems.join("; ")}.`);
     } finally {
       setAttachBusy(false);
     }
@@ -365,6 +376,7 @@ export function MeetingEditor({
               ref={fileRef}
               type="file"
               accept="application/pdf,.pdf"
+              multiple
               disabled={attachBusy}
               onChange={onPickPdf}
               style={{ display: "none" }}
