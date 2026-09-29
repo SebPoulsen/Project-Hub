@@ -7,6 +7,7 @@ import {
   exists,
 } from "./paths";
 import { normalizePlacementTag, type PlacementTag } from "./placement-tag";
+import { toMarkdown } from "./frontmatter";
 
 export interface ReflectionData {
   noticed: string;
@@ -39,22 +40,20 @@ export function serializeReflection(
   data: ReflectionData,
   meta: ReflectionMeta
 ): string {
-  const tags = data.tags?.length ? `[${data.tags.join(", ")}]` : "[]";
-  const research = data.research?.length ? `[${data.research.join(", ")}]` : "[]";
-  const lines = [
-    "---",
-    `date: ${meta.date}`,
-    `project: ${meta.project}`,
-    `tags: ${tags}`,
-    `research: ${research}`,
-    ...(data.placement ? [`placement: ${data.placement}`] : []),
-    "---",
-    "",
-  ];
+  const bodyLines: string[] = [];
   for (const s of SECTIONS) {
-    lines.push(`## ${s.heading}`, "", (data[s.key] as string)?.trim() ?? "", "");
+    bodyLines.push(`## ${s.heading}`, "", (data[s.key] as string)?.trim() ?? "", "");
   }
-  return lines.join("\n");
+  return toMarkdown(
+    {
+      date: meta.date,
+      project: meta.project,
+      tags: data.tags ?? [],
+      research: data.research ?? [],
+      ...(data.placement ? { placement: data.placement } : {}),
+    },
+    bodyLines.join("\n")
+  );
 }
 
 /**
@@ -67,7 +66,17 @@ export function serializeReflection(
  * following heading into the empty section).
  */
 export function parseReflection(raw: string): ReflectionData {
-  const { content, data } = matter(raw);
+  let content: string;
+  let data: Record<string, unknown>;
+  try {
+    ({ content, data } = matter(raw) as { content: string; data: Record<string, unknown> });
+  } catch (e) {
+    // Unparseable frontmatter — recover the body text (sections) and drop the
+    // broken frontmatter rather than throwing (which would 500 the page).
+    console.warn(`parseReflection: unparseable frontmatter: ${(e as Error).message}`);
+    content = raw.replace(/^---[\s\S]*?\n---\n?/, "");
+    data = {};
+  }
   const result: ReflectionData = {
     noticed: "",
     learned: "",
@@ -158,11 +167,15 @@ export async function listReflectionMeta(
     .reverse();
   const out: { date: string; placement: PlacementTag | null }[] = [];
   for (const f of files) {
-    const { data } = matter(await fs.readFile(path.join(dir, f), "utf8"));
-    out.push({
-      date: f.replace(/\.md$/, ""),
-      placement: normalizePlacementTag(data.placement),
-    });
+    let placement: PlacementTag | null = null;
+    try {
+      const { data } = matter(await fs.readFile(path.join(dir, f), "utf8"));
+      placement = normalizePlacementTag(data.placement);
+    } catch (e) {
+      // Keep the entry (its date is the filename) but drop the unreadable tag.
+      console.warn(`listReflectionMeta: unparseable ${f}: ${(e as Error).message}`);
+    }
+    out.push({ date: f.replace(/\.md$/, ""), placement });
   }
   return out;
 }

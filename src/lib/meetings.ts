@@ -3,6 +3,7 @@ import path from "node:path";
 import matter from "gray-matter";
 import { meetingsDir, attachmentsDir, exists } from "./paths";
 import { toDateStr } from "./notes";
+import { toMarkdown } from "./frontmatter";
 import { cryptoRandomId, today } from "./projects";
 import { normalizePlacementTag, type PlacementTag } from "./placement-tag";
 
@@ -46,7 +47,15 @@ export async function listMeetings(slug: string): Promise<MeetingMeta[]> {
   const out: MeetingMeta[] = [];
   for (const f of files) {
     const raw = await fs.readFile(path.join(dir, f), "utf8");
-    const { data, content } = matter(raw);
+    let data: Record<string, unknown>;
+    let content: string;
+    try {
+      ({ data, content } = matter(raw) as { data: Record<string, unknown>; content: string });
+    } catch (e) {
+      // A single unparseable file must not 500 the whole list — skip it.
+      console.warn(`listMeetings: skipping unparseable ${f}: ${(e as Error).message}`);
+      continue;
+    }
     out.push({
       id: f.replace(/\.md$/, ""),
       title: String(data.title ?? f.replace(/\.md$/, "")),
@@ -72,7 +81,15 @@ export async function readMeeting(
   const file = path.join(meetingsDir(slug), `${id}.md`);
   if (!(await exists(file))) return null;
   const raw = await fs.readFile(file, "utf8");
-  const { data, content } = matter(raw);
+  let data: Record<string, unknown>;
+  let content: string;
+  try {
+    ({ data, content } = matter(raw) as { data: Record<string, unknown>; content: string });
+  } catch (e) {
+    // Unparseable frontmatter — degrade to "not found" rather than a 500.
+    console.warn(`readMeeting: unparseable ${id}.md: ${(e as Error).message}`);
+    return null;
+  }
   return {
     id,
     title: String(data.title ?? id),
@@ -112,22 +129,18 @@ function serialize(
   slug: string,
   attachments: string[]
 ): string {
-  const tags = input.tags.length ? `[${input.tags.join(", ")}]` : "[]";
-  const attachYaml = attachments.length ? `[${attachments.join(", ")}]` : "[]";
-  return [
-    "---",
-    `title: ${input.title || "Untitled meeting"}`,
-    `meeting: ${input.meeting || ""}`,
-    `date: ${input.date}`,
-    `project: ${slug}`,
-    `tags: ${tags}`,
-    ...(input.placement ? [`placement: ${input.placement}`] : []),
-    `attachments: ${attachYaml}`,
-    "---",
-    "",
-    input.body.trim(),
-    "",
-  ].join("\n");
+  return toMarkdown(
+    {
+      title: input.title || "Untitled meeting",
+      meeting: input.meeting || "",
+      date: input.date,
+      project: slug,
+      tags: input.tags,
+      ...(input.placement ? { placement: input.placement } : {}),
+      attachments,
+    },
+    input.body
+  );
 }
 
 /** Sanitize a user-supplied attachment filename to a safe basename. */

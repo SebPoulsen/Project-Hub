@@ -9,6 +9,7 @@ import {
 import { cryptoRandomId, today } from "./projects";
 import { normalizePlacementTag, type PlacementTag } from "./placement-tag";
 import { isImageAttachment } from "./attachments";
+import { toMarkdown } from "./frontmatter";
 
 export interface NoteMeta {
   id: string; // filename without .md
@@ -69,7 +70,15 @@ export async function listNotes(slug: string): Promise<NoteMeta[]> {
   const notes: NoteMeta[] = [];
   for (const f of files) {
     const raw = await fs.readFile(path.join(dir, f), "utf8");
-    const { data, content } = matter(raw);
+    let data: Record<string, unknown>;
+    let content: string;
+    try {
+      ({ data, content } = matter(raw) as { data: Record<string, unknown>; content: string });
+    } catch (e) {
+      // A single unparseable file must not 500 the whole list — skip it.
+      console.warn(`listNotes: skipping unparseable ${f}: ${(e as Error).message}`);
+      continue;
+    }
     notes.push({
       id: f.replace(/\.md$/, ""),
       title: String(data.title ?? f.replace(/\.md$/, "")),
@@ -102,7 +111,15 @@ export async function readNote(slug: string, id: string): Promise<Note | null> {
   const file = path.join(notesDir(slug), `${id}.md`);
   if (!(await exists(file))) return null;
   const raw = await fs.readFile(file, "utf8");
-  const { data, content } = matter(raw);
+  let data: Record<string, unknown>;
+  let content: string;
+  try {
+    ({ data, content } = matter(raw) as { data: Record<string, unknown>; content: string });
+  } catch (e) {
+    // Unparseable frontmatter — degrade to "not found" rather than a 500.
+    console.warn(`readNote: unparseable ${id}.md: ${(e as Error).message}`);
+    return null;
+  }
   return {
     id,
     title: String(data.title ?? id),
@@ -165,9 +182,6 @@ export async function createNote(
     savedNames.push(fname);
   }
 
-  const tags = input.tags.length ? `[${input.tags.join(", ")}]` : "[]";
-  const research = input.research.length ? `[${input.research.join(", ")}]` : "[]";
-  const attachYaml = savedNames.length ? `[${savedNames.join(", ")}]` : "[]";
   // Only images get an inline markdown image line (so the raw .md previews
   // them). PDFs are tracked in frontmatter `attachments:` only — an `![]()` on
   // a PDF would render as a broken image.
@@ -176,20 +190,18 @@ export async function createNote(
     .map((f) => `![${f}](../attachments/${f})`)
     .join("\n\n");
 
-  const md = [
-    "---",
-    `title: ${input.title || "Untitled note"}`,
-    `date: ${date}`,
-    `project: ${slug}`,
-    `tags: ${tags}`,
-    `research: ${research}`,
-    ...(input.placement ? [`placement: ${input.placement}`] : []),
-    `attachments: ${attachYaml}`,
-    "---",
-    "",
-    input.body.trim(),
-    imageBlock ? "\n" + imageBlock + "\n" : "",
-  ].join("\n");
+  const md = toMarkdown(
+    {
+      title: input.title || "Untitled note",
+      date,
+      project: slug,
+      tags: input.tags,
+      research: input.research,
+      ...(input.placement ? { placement: input.placement } : {}),
+      attachments: savedNames,
+    },
+    [input.body.trim(), imageBlock].filter(Boolean).join("\n\n")
+  );
 
   await fs.writeFile(path.join(notesDir(slug), `${id}.md`), md);
 
@@ -244,30 +256,23 @@ export async function updateNote(
   }
 
   const finalAttachments = [...input.keepAttachments, ...savedNew];
-  const tags = input.tags.length ? `[${input.tags.join(", ")}]` : "[]";
-  const research = input.research.length ? `[${input.research.join(", ")}]` : "[]";
-  const attachYaml = finalAttachments.length
-    ? `[${finalAttachments.join(", ")}]`
-    : "[]";
   const imageBlock = finalAttachments
     .filter(isImageAttachment)
     .map((f) => `![${f}](../attachments/${f})`)
     .join("\n\n");
 
-  const md = [
-    "---",
-    `title: ${input.title || "Untitled note"}`,
-    `date: ${existing.date}`,
-    `project: ${slug}`,
-    `tags: ${tags}`,
-    `research: ${research}`,
-    ...(input.placement ? [`placement: ${input.placement}`] : []),
-    `attachments: ${attachYaml}`,
-    "---",
-    "",
-    input.body.trim(),
-    imageBlock ? "\n" + imageBlock + "\n" : "",
-  ].join("\n");
+  const md = toMarkdown(
+    {
+      title: input.title || "Untitled note",
+      date: existing.date,
+      project: slug,
+      tags: input.tags,
+      research: input.research,
+      ...(input.placement ? { placement: input.placement } : {}),
+      attachments: finalAttachments,
+    },
+    [input.body.trim(), imageBlock].filter(Boolean).join("\n\n")
+  );
 
   await fs.writeFile(path.join(notesDir(slug), `${id}.md`), md);
 
