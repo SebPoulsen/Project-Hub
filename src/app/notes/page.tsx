@@ -441,15 +441,17 @@ function NotesInner() {
             )}
 
             <div className="row between">
-              <label className="stack" style={{ gap: 4 }}>
-                <span className="label">Add images or PDF</span>
+              {/* Styled trigger over a hidden native input — matches the
+                  Meetings attach button. Notes accepts images and PDFs. */}
+              <label className="btn btn-ghost" style={{ cursor: "pointer" }}>
+                📎 Attach file
                 <input
                   ref={fileRef}
                   type="file"
                   accept="image/*,application/pdf,.pdf"
                   multiple
                   onChange={onPickFiles}
-                  style={{ width: "auto", border: "none", padding: 0 }}
+                  style={{ display: "none" }}
                 />
               </label>
               <div className="row">
