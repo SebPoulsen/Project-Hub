@@ -10,5 +10,6 @@
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
-.env*.local
+.env*
+!.env.example
 npm-debug.log*
