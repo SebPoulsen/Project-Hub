@@ -66,7 +66,7 @@ const EMPTY_FORM: FormState = {
 };
 
 export default function CompaniesPage() {
-  const { current, loading } = useHub();
+  const { current, loading, mapDefault, setMapDefault } = useHub();
   const { scheduleDelete } = usePendingDeletes();
 
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -416,6 +416,7 @@ export default function CompaniesPage() {
               <CompaniesMap
                 height={280}
                 pickMode
+                defaultView={mapDefault}
                 pick={
                   form.lat != null && form.lng != null
                     ? { lat: form.lat, lng: form.lng }
@@ -445,7 +446,9 @@ export default function CompaniesPage() {
         <CompaniesMap
           companies={visible}
           height={420}
+          defaultView={mapDefault}
           onSelect={highlightCompany}
+          onSetDefault={setMapDefault}
         />
       </div>
       <div className="row between" style={{ gap: 16, marginBottom: 20, flexWrap: "wrap" }}>

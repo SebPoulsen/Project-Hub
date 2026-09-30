@@ -3,15 +3,33 @@ import { SETTINGS_FILE, ensureDataDir, exists } from "./paths";
 
 export type ThemeName = "dark" | "light" | "beige";
 
+/** Default center + zoom for the Companies map before any pins exist. */
+export interface MapView {
+  lat: number;
+  lng: number;
+  zoom: number;
+}
+
 export interface Settings {
   theme: ThemeName;
   lastProject: string | null;
+  /**
+   * Fallback view for the Companies map when a project has no located pins yet.
+   * Neutral world view by default; the user can set their own from the map
+   * (see the Companies overview). Kept in settings, not hardcoded, so the app
+   * ships without pointing at any particular place.
+   */
+  mapDefault: MapView;
   createdAt: string;
 }
+
+/** Neutral, place-agnostic world view. */
+const DEFAULT_MAP_VIEW: MapView = { lat: 20, lng: 0, zoom: 2 };
 
 const DEFAULT_SETTINGS: Settings = {
   theme: "dark",
   lastProject: null,
+  mapDefault: { ...DEFAULT_MAP_VIEW },
   createdAt: new Date().toISOString(),
 };
 

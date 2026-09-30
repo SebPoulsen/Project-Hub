@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Company } from "@/lib/companies";
+import type { MapView } from "@/lib/settings";
+
+/** Neutral fallback if no default view is supplied. */
+const FALLBACK_VIEW: MapView = { lat: 20, lng: 0, zoom: 2 };
 
 /**
  * Leaflet + OpenStreetMap map. Plain Leaflet (no react-leaflet) to stay
@@ -34,6 +38,8 @@ export default function CompaniesMap({
   pickMode = false,
   pick = null,
   onPick,
+  defaultView,
+  onSetDefault,
 }: {
   companies?: Company[];
   onSelect?: (id: string) => void;
@@ -41,6 +47,10 @@ export default function CompaniesMap({
   pickMode?: boolean;
   pick?: { lat: number; lng: number } | null;
   onPick?: (lat: number, lng: number) => void;
+  /** Fallback center + zoom used before any pins exist (from settings). */
+  defaultView?: MapView;
+  /** When provided, shows a control that saves the current view as the default. */
+  onSetDefault?: (v: MapView) => void;
 }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -48,14 +58,19 @@ export default function CompaniesMap({
   const pickRef = useRef<L.Marker | null>(null);
   const onSelectRef = useRef(onSelect);
   const onPickRef = useRef(onPick);
+  // Read the latest default in the run-once init effect without re-initing.
+  const defaultViewRef = useRef(defaultView);
   onSelectRef.current = onSelect;
   onPickRef.current = onPick;
+  defaultViewRef.current = defaultView;
+  const [savedFlash, setSavedFlash] = useState(false);
 
   // Init once.
   useEffect(() => {
     if (!elRef.current || mapRef.current) return;
-    // Default view: Aarhus, Denmark, moderately zoomed — so a new entry doesn't
-    // start on a full world view. Overridden by fitBounds when pins exist.
+    // Default view comes from settings (a neutral world view out of the box) so
+    // the app ships without pointing at any particular place. Overridden by
+    // fitBounds when pins exist.
     // fadeAnimation:false is deliberate, not cosmetic: with the tile fade on,
     // Leaflet's GridLayer._tileReady schedules a requestAnimFrame(_updateOpacity)
     // and a setTimeout(_pruneTiles, 250) whose ids it never stores, so
@@ -63,10 +78,11 @@ export default function CompaniesMap({
     // within that window they fire against a map whose _mapPane has been deleted
     // → getPosition(undefined) → "Cannot read properties of undefined
     // (reading '_leaflet_pos')". Disabling fade removes those deferred callbacks.
+    const view = defaultViewRef.current ?? FALLBACK_VIEW;
     const map = L.map(elRef.current, {
       scrollWheelZoom: true,
       fadeAnimation: false,
-    }).setView([56.1629, 10.2039], 11, { animate: false });
+    }).setView([view.lat, view.lng], view.zoom, { animate: false });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors",
       maxZoom: 19,
@@ -160,12 +176,33 @@ export default function CompaniesMap({
     }
   }, [pick, pickMode]);
 
+  function saveCurrentAsDefault() {
+    const map = mapRef.current;
+    if (!map || !onSetDefault) return;
+    const c = map.getCenter();
+    onSetDefault({ lat: c.lat, lng: c.lng, zoom: map.getZoom() });
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 1600);
+  }
+
   return (
-    <div
-      ref={elRef}
-      className="companies-map"
-      style={{ height, width: "100%" }}
-    />
+    <div style={{ position: "relative", height, width: "100%" }}>
+      <div
+        ref={elRef}
+        className="companies-map"
+        style={{ height: "100%", width: "100%" }}
+      />
+      {onSetDefault && (
+        <button
+          type="button"
+          className="map-set-default"
+          onClick={saveCurrentAsDefault}
+          title="Remember this center and zoom as the default view for maps with no pins yet"
+        >
+          {savedFlash ? "✓ Saved as default" : "Set as default view"}
+        </button>
+      )}
+    </div>
   );
 }
 

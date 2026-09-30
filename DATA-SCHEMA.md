@@ -271,9 +271,9 @@ to `{ items }` on the next write.
 ```json
 {
   "items": [
-    { "id": "co-a1b2c3d4", "name": "FabLab Oslo", "status": "visited",
-      "address": "Oslo, Norway", "website": "", "notes": "",
-      "lat": 59.9139, "lng": 10.7522, "visitDate": "2026-09-15", "createdAt": "…" }
+    { "id": "co-a1b2c3d4", "name": "Example Company", "status": "visited",
+      "address": "123 Example Street, Anytown", "website": "", "notes": "",
+      "lat": 0, "lng": 0, "visitDate": "2026-09-15", "createdAt": "…" }
   ]
 }
 ```
@@ -294,7 +294,7 @@ an event with no start time is treated as all-day.
 ```json
 {
   "items": [
-    { "id": "evt-a1b2c3d4", "title": "Startvækst Aarhus kickoff",
+    { "id": "evt-a1b2c3d4", "title": "Company kickoff meeting",
       "date": "2026-09-20", "startTime": "14:00", "endTime": "16:00",
       "notes": "", "companyId": "co-a1b2c3d4", "placement": "primary",
       "createdAt": "…" }

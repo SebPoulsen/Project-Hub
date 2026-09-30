@@ -635,6 +635,25 @@ select:focus {
   background: var(--card-2);
   font-family: var(--font-sans);
 }
+/* Overlay control to save the current map view as the default (Companies). */
+.map-set-default {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 400; /* above Leaflet panes (~200-400), under app modals (900+) */
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+.map-set-default:hover {
+  background: var(--card-2);
+}
 .map-pin {
   display: block;
   width: 16px;

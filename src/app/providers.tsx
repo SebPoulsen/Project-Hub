@@ -8,7 +8,9 @@ import React, {
   useCallback,
 } from "react";
 import type { Project } from "@/lib/projects";
-import type { ThemeName } from "@/lib/settings";
+import type { ThemeName, MapView } from "@/lib/settings";
+
+const DEFAULT_MAP_VIEW: MapView = { lat: 20, lng: 0, zoom: 2 };
 
 interface Ctx {
   loading: boolean;
@@ -16,6 +18,8 @@ interface Ctx {
   current: Project | null;
   theme: ThemeName;
   setTheme: (t: ThemeName) => void;
+  mapDefault: MapView;
+  setMapDefault: (v: MapView) => void;
   selectProject: (slug: string) => void;
   createProject: (name: string) => Promise<Project | null>;
   deleteProject: (slug: string) => Promise<void>;
@@ -43,6 +47,7 @@ export function Providers({
   // Seeded from the server-read palette (see layout) so it matches the theme
   // already on <html> — no post-hydration flip.
   const [theme, setThemeState] = useState<ThemeName>(initialTheme);
+  const [mapDefault, setMapDefaultState] = useState<MapView>(DEFAULT_MAP_VIEW);
 
   const applyTheme = (t: ThemeName) => {
     document.documentElement.setAttribute("data-theme", t);
@@ -55,6 +60,15 @@ export function Providers({
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ theme: t }),
+    }).catch(() => {});
+  }, []);
+
+  const setMapDefault = useCallback((v: MapView) => {
+    setMapDefaultState(v);
+    fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mapDefault: v }),
     }).catch(() => {});
   }, []);
 
@@ -121,6 +135,7 @@ export function Providers({
         const t: ThemeName = settings?.theme ?? "dark";
         setThemeState(t);
         applyTheme(t);
+        if (settings?.mapDefault) setMapDefaultState(settings.mapDefault);
         setProjects(list);
         const last =
           list.find((p: Project) => p.slug === settings?.lastProject) ??
@@ -141,6 +156,8 @@ export function Providers({
         current,
         theme,
         setTheme,
+        mapDefault,
+        setMapDefault,
         selectProject,
         createProject,
         deleteProject,

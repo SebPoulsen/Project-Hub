@@ -128,7 +128,7 @@ export function EventEditor({
               type="text"
               value={form.title}
               autoFocus
-              placeholder="e.g. Startvækst Aarhus kickoff"
+              placeholder="e.g. Company kickoff meeting"
               onChange={(e) => set("title", e.target.value)}
             />
           </div>
