@@ -74,6 +74,8 @@ That's iCloud Drive → `ProjectHub`. Each project is its own subfolder **and it
 own git repo** (auto-committed on save). See `DATA-SCHEMA.md` for the exact
 layout of a project folder.
 
+> **Note:** if you aren't actually using iCloud Drive (or it isn't signed in), this folder is still created locally but **won't be backed up** — confirm iCloud sync is active, or point `PROJECTHUB_DATA_DIR` (below) at a different synced location.
+
 To move the data elsewhere (e.g. a different synced folder), set an environment
 variable before launching:
 
